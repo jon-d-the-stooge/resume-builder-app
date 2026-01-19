@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manual Content Entry</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      padding: 40px;
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .form-group {
+      margin-bottom: 24px;
+    }
+
+    .form-group label {
+      display: block;
+      color: #333;
+      font-weight: 500;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+
+    .form-group label .required {
+      color: #f44336;
+      margin-left: 4px;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      font-family: inherit;
+      transition: border-color 0.3s ease;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: #4CAF50;
+    }
+
+    .form-group textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+
+    .form-group.error input,
+    .form-group.error select,
+    .form-group.error textarea {
+      border-color: #f44336;
+    }
+
+    .error-message {
+      color: #f44336;
+      font-size: 12px;
+      margin-top: 4px;
+      display: none;
+    }
+
+    .form-group.error .error-message {
+      display: block;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .tag-input-container {
+      position: relative;
+    }
+
+    .tag-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+      min-height: 32px;
+    }
+
+    .tag-item {
+      background: #e8f5e9;
+      color: #2e7d32;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .tag-item .remove-tag {
+      cursor: pointer;
+      font-weight: bold;
+      color: #2e7d32;
+    }
+
+    .tag-item .remove-tag:hover {
+      color: #1b5e20;
+    }
+
+    .tag-suggestions {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: white;
+      border: 1px solid #ddd;
+      border-top: none;
+      border-radius: 0 0 4px 4px;
+      max-height: 200px;
+      overflow-y: auto;
+      display: none;
+      z-index: 10;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+
+    .tag-suggestions.visible {
+      display: block;
+    }
+
+    .tag-suggestion-item {
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 14px;
+      color: #333;
+    }
+
+    .tag-suggestion-item:hover {
+      background: #f5f5f5;
+    }
+
+    .metadata-section {
+      background: #f9f9f9;
+      padding: 20px;
+      border-radius: 4px;
+      margin-bottom: 24px;
+    }
+
+    .metadata-section h3 {
+      color: #333;
+      font-size: 16px;
+      margin-bottom: 16px;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 12px;
+      margin-top: 32px;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-weight: 500;
+    }
+
+    .btn-primary {
+      background: #4CAF50;
+      color: white;
+      flex: 1;
+    }
+
+    .btn-primary:hover {
+      background: #45a049;
+    }
+
+    .btn-primary:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background: #f5f5f5;
+      color: #666;
+      border: 1px solid #ddd;
+    }
+
+    .btn-secondary:hover {
+      background: #eee;
+    }
+
+    .success-message {
+      background: #e8f5e9;
+      color: #2e7d32;
+      padding: 16px;
+      border-radius: 4px;
+      border: 1px solid #a5d6a7;
+      margin-bottom: 24px;
+      display: none;
+    }
+
+    .success-message.visible {
+      display: block;
+    }
+
+    .help-text {
+      color: #999;
+      font-size: 12px;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Manual Content Entry</h1>
+    <p class="subtitle">Add new professional content to your vault</p>
+
+    <div style="margin-bottom: 20px; text-align: center;">
+      <a href="./index.html" style="color: #4CAF50; text-decoration: none; font-size: 14px; margin-right: 20px;">← Home</a>
+      <a href="./search.html" style="color: #4CAF50; text-decoration: none; font-size: 14px; margin-right: 20px;">Search</a>
+      <a href="./optimizer.html" style="color: #4CAF50; text-decoration: none; font-size: 14px; margin-right: 20px;">ATS Optimizer</a>
+      <a href="./settings.html" style="color: #4CAF50; text-decoration: none; font-size: 14px;">Settings</a>
+    </div>
+
+    <div class="success-message" id="successMessage">
+      Content item created successfully!
+    </div>
+
+    <form id="manualEntryForm">
+      <div class="form-group">
+        <label for="contentType">
+          Content Type
+          <span class="required">*</span>
+        </label>
+        <select id="contentType" name="contentType" required>
+          <option value="">Select a type...</option>
+          <option value="job-entry">Job Entry</option>
+          <option value="job-title">Job Title</option>
+          <option value="job-location">Job Location</option>
+          <option value="job-duration">Job Duration</option>
+          <option value="skill">Skill</option>
+          <option value="accomplishment">Accomplishment</option>
+          <option value="education">Education</option>
+          <option value="certification">Certification</option>
+        </select>
+        <div class="error-message" id="contentTypeError">Please select a content type</div>
+      </div>
+
+      <div class="form-group">
+        <label for="contentText">
+          Content
+          <span class="required">*</span>
+        </label>
+        <textarea id="contentText" name="contentText" placeholder="Enter your content here..." required></textarea>
+        <div class="error-message" id="contentTextError">Content is required</div>
+        <div class="help-text">Describe the content item in detail</div>
+      </div>
+
+      <div class="form-group">
+        <label for="tagInput">Tags</label>
+        <div class="tag-input-container">
+          <input type="text" id="tagInput" placeholder="Type to add tags...">
+          <div class="tag-suggestions" id="tagSuggestions"></div>
+        </div>
+        <div class="tag-list" id="tagList"></div>
+        <div class="help-text">Press Enter to add a tag, or select from suggestions</div>
+      </div>
+
+      <div class="metadata-section">
+        <h3>Metadata (Optional)</h3>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label for="startDate">Start Date</label>
+            <input type="date" id="startDate" name="startDate">
+          </div>
+          <div class="form-group">
+            <label for="endDate">End Date</label>
+            <input type="date" id="endDate" name="endDate">
+            <div class="help-text">Leave blank for current</div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="company">Company/Organization</label>
+            <input type="text" id="company" name="company" placeholder="e.g., Acme Corp">
+          </div>
+          <div class="form-group">
+            <label for="proficiency">Proficiency/Level</label>
+            <select id="proficiency" name="proficiency">
+              <option value="">Select...</option>
+              <option value="beginner">Beginner</option>
+              <option value="intermediate">Intermediate</option>
+              <option value="advanced">Advanced</option>
+              <option value="expert">Expert</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="city">City</label>
+            <input type="text" id="city" name="city" placeholder="e.g., San Francisco">
+          </div>
+          <div class="form-group">
+            <label for="state">State/Province</label>
+            <input type="text" id="state" name="state" placeholder="e.g., CA">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="country">Country</label>
+          <input type="text" id="country" name="country" placeholder="e.g., USA">
+        </div>
+
+        <div class="form-group">
+          <label for="notes">Notes</label>
+          <textarea id="notes" name="notes" placeholder="Additional notes or context..." style="min-height: 80px;"></textarea>
+        </div>
+      </div>
+
+      <div class="action-buttons">
+        <button type="submit" class="btn btn-primary" id="submitButton">Create Content Item</button>
+        <button type="button" class="btn btn-secondary" id="cancelButton">Cancel</button>
+      </div>
+    </form>
+  </div>
+
+  <script src="./manual-entry.js"></script>
+</body>
+</html>

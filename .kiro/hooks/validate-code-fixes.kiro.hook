@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Validate Code Fixes",
+  "description": "Automatically validate code changes using adversarial review when fixing errors to ensure fixes actually work before declaring them complete",
+  "version": "1",
+  "when": {
+    "type": "agentStop"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "If I just fixed a bug or error in the previous response, use the mcp_validation_adversarial_review tool to validate the fix before declaring it complete. Include the changed code and requirements in the review. This will help catch issues before the user encounters them."
+  }
+}

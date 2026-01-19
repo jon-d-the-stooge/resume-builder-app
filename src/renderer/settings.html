@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings - Resume Parser</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      padding: 40px;
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .nav-links {
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .nav-links a {
+      color: #4CAF50;
+      text-decoration: none;
+      font-size: 14px;
+      margin-right: 20px;
+    }
+
+    .nav-links a:hover {
+      text-decoration: underline;
+    }
+
+    .form-section {
+      margin-bottom: 30px;
+      padding-bottom: 30px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .form-section:last-of-type {
+      border-bottom: none;
+    }
+
+    .section-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 15px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .form-hint {
+      font-size: 12px;
+      color: #888;
+      margin-top: 5px;
+    }
+
+    .radio-group {
+      display: flex;
+      gap: 20px;
+    }
+
+    .radio-option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+    }
+
+    .radio-option input[type="radio"] {
+      width: 18px;
+      height: 18px;
+      accent-color: #4CAF50;
+    }
+
+    .radio-option label {
+      font-size: 14px;
+      color: #333;
+      cursor: pointer;
+    }
+
+    .input-wrapper {
+      position: relative;
+      display: flex;
+      gap: 10px;
+    }
+
+    .form-input {
+      flex: 1;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      font-family: monospace;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: #4CAF50;
+    }
+
+    .form-input.has-key {
+      border-color: #4CAF50;
+      background: #f8fff8;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .btn-small {
+      padding: 10px 16px;
+      font-size: 13px;
+    }
+
+    .btn-primary {
+      background: #4CAF50;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #45a049;
+    }
+
+    .btn-secondary {
+      background: #f5f5f5;
+      color: #666;
+      border: 1px solid #ddd;
+    }
+
+    .btn-secondary:hover {
+      background: #eee;
+    }
+
+    .btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    .btn-toggle {
+      background: #f5f5f5;
+      border: 1px solid #ddd;
+      padding: 10px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    .btn-toggle:hover {
+      background: #eee;
+    }
+
+    .status-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      margin-left: 10px;
+    }
+
+    .status-configured {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .status-not-configured {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    .status-validating {
+      background: #e3f2fd;
+      color: #1565c0;
+    }
+
+    .status-valid {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .status-invalid {
+      background: #ffebee;
+      color: #c62828;
+    }
+
+    .action-bar {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 1px solid #eee;
+    }
+
+    .message {
+      padding: 12px 16px;
+      border-radius: 4px;
+      font-size: 14px;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .message.visible {
+      display: block;
+    }
+
+    .message.success {
+      background: #e8f5e9;
+      color: #2e7d32;
+      border: 1px solid #a5d6a7;
+    }
+
+    .message.error {
+      background: #ffebee;
+      color: #c62828;
+      border: 1px solid #ef9a9a;
+    }
+
+    .key-status {
+      display: flex;
+      align-items: center;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation Header -->
+  <nav style="background: white; border-bottom: 1px solid #e0e0e0; padding: 0 30px; position: sticky; top: 0; z-index: 100; margin: -20px -20px 20px -20px; width: calc(100% + 40px);">
+    <div style="max-width: 1400px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: 60px;">
+      <a href="./index.html" style="display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 600; color: #333; text-decoration: none;">
+        <div style="width: 32px; height: 32px; background: linear-gradient(135deg, #4CAF50, #2e7d32); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-size: 18px;">R</div>
+        Resume Optimizer
+      </a>
+      <div style="display: flex; gap: 8px;">
+        <a href="./index.html" style="padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; color: #666;">Dashboard</a>
+        <a href="./optimizer.html" style="padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; color: #666;">Optimizer</a>
+        <a href="./queue.html" style="padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; color: #666;">Queue</a>
+        <a href="./chat.html" style="padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; color: #666;">Chat</a>
+        <a href="./job-search.html" style="padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; color: #666;">Job Search</a>
+        <a href="./vault.html" style="padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; color: #666;">Vault</a>
+      </div>
+      <a href="./settings.html" style="padding: 8px; border-radius: 6px; background: #e8f5e9; text-decoration: none; color: #2e7d32; font-size: 18px;" title="Settings">&#9881;</a>
+    </div>
+  </nav>
+
+  <div class="container" style="margin-top: 0; padding-top: 20px;">
+    <h1>Settings</h1>
+    <p class="subtitle">Configure your LLM provider and API keys</p>
+
+    <div class="message" id="message"></div>
+
+    <form id="settingsForm">
+      <div class="form-section">
+        <h3 class="section-title">LLM Provider</h3>
+        <div class="form-group">
+          <div class="radio-group">
+            <div class="radio-option">
+              <input type="radio" id="providerAnthropic" name="llmProvider" value="anthropic" checked>
+              <label for="providerAnthropic">Anthropic (Claude)</label>
+            </div>
+            <div class="radio-option">
+              <input type="radio" id="providerOpenai" name="llmProvider" value="openai">
+              <label for="providerOpenai">OpenAI (GPT-4)</label>
+            </div>
+          </div>
+          <p class="form-hint">Select which AI provider to use for resume parsing and optimization.</p>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <h3 class="section-title">
+          Anthropic API Key
+          <span class="status-indicator status-not-configured" id="anthropicStatus">Not configured</span>
+        </h3>
+        <div class="form-group">
+          <label class="form-label">API Key</label>
+          <div class="input-wrapper">
+            <input type="password" class="form-input" id="anthropicApiKey" placeholder="sk-ant-...">
+            <button type="button" class="btn-toggle" id="toggleAnthropic" title="Show/Hide">Show</button>
+            <button type="button" class="btn btn-secondary btn-small" id="testAnthropic">Test</button>
+          </div>
+          <p class="form-hint">Get your API key from <a href="https://console.anthropic.com/settings/keys" target="_blank">console.anthropic.com</a></p>
+          <div class="key-status" id="anthropicTestStatus"></div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <h3 class="section-title">
+          OpenAI API Key
+          <span class="status-indicator status-not-configured" id="openaiStatus">Not configured</span>
+        </h3>
+        <div class="form-group">
+          <label class="form-label">API Key</label>
+          <div class="input-wrapper">
+            <input type="password" class="form-input" id="openaiApiKey" placeholder="sk-...">
+            <button type="button" class="btn-toggle" id="toggleOpenai" title="Show/Hide">Show</button>
+            <button type="button" class="btn btn-secondary btn-small" id="testOpenai">Test</button>
+          </div>
+          <p class="form-hint">Get your API key from <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com</a></p>
+          <div class="key-status" id="openaiTestStatus"></div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <h3 class="section-title">
+          Job Search: JSearch API (LinkedIn + Indeed)
+          <span class="status-indicator status-not-configured" id="jsearchStatus">Not configured</span>
+        </h3>
+        <p class="form-hint" style="margin-bottom: 15px;">
+          JSearch aggregates jobs from <strong>LinkedIn, Indeed, Glassdoor, ZipRecruiter</strong> and more. Free tier: 500 requests/month. <em>Recommended for best results.</em>
+        </p>
+        <div class="form-group">
+          <label class="form-label">RapidAPI Key</label>
+          <div class="input-wrapper">
+            <input type="password" class="form-input" id="jsearchApiKey" placeholder="Your RapidAPI Key">
+            <button type="button" class="btn-toggle" id="toggleJSearch" title="Show/Hide">Show</button>
+          </div>
+          <p class="form-hint">Get your key from <a href="https://rapidapi.com/letscrape-6bRBa3QguO5/api/jsearch" target="_blank">RapidAPI JSearch</a> (free signup, subscribe to JSearch)</p>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <h3 class="section-title">
+          Job Search: Adzuna API (Optional)
+          <span class="status-indicator status-not-configured" id="adzunaStatus">Not configured</span>
+        </h3>
+        <p class="form-hint" style="margin-bottom: 15px;">
+          Adzuna provides additional job listings with good location filtering. Free tier: 200 requests/month.
+        </p>
+        <div class="form-group">
+          <label class="form-label">App ID</label>
+          <div class="input-wrapper">
+            <input type="text" class="form-input" id="adzunaAppId" placeholder="Your Adzuna App ID">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">API Key</label>
+          <div class="input-wrapper">
+            <input type="password" class="form-input" id="adzunaApiKey" placeholder="Your Adzuna API Key">
+            <button type="button" class="btn-toggle" id="toggleAdzuna" title="Show/Hide">Show</button>
+          </div>
+          <p class="form-hint">Get your credentials from <a href="https://developer.adzuna.com/" target="_blank">developer.adzuna.com</a> (free signup)</p>
+        </div>
+      </div>
+
+      <div class="action-bar">
+        <button type="button" class="btn btn-secondary" id="cancelButton">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="saveButton">Save Settings</button>
+      </div>
+    </form>
+  </div>
+
+  <script src="./settings.js"></script>
+</body>
+</html>

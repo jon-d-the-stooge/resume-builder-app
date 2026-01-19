@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ATS Resume Optimizer</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      padding: 40px;
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .nav-links {
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .nav-links a {
+      color: #4CAF50;
+      text-decoration: none;
+      font-size: 14px;
+      margin: 0 10px;
+    }
+
+    .nav-links a:hover {
+      text-decoration: underline;
+    }
+
+    /* Two-column input layout */
+    .input-section {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 30px;
+      margin-bottom: 30px;
+    }
+
+    .input-panel {
+      background: #f9f9f9;
+      border-radius: 8px;
+      padding: 25px;
+      border: 1px solid #e0e0e0;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .panel-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .panel-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn {
+      padding: 10px 18px;
+      border: none;
+      border-radius: 4px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .btn-primary {
+      background: #4CAF50;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #45a049;
+    }
+
+    .btn-secondary {
+      background: #f5f5f5;
+      color: #666;
+      border: 1px solid #ddd;
+    }
+
+    .btn-secondary:hover {
+      background: #eee;
+    }
+
+    .btn-large {
+      padding: 14px 40px;
+      font-size: 16px;
+      font-weight: 500;
+    }
+
+    .btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    .form-group {
+      margin-bottom: 15px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: #555;
+      margin-bottom: 6px;
+    }
+
+    .form-input,
+    .form-textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+
+    .form-input:focus,
+    .form-textarea:focus {
+      outline: none;
+      border-color: #4CAF50;
+    }
+
+    .form-textarea {
+      min-height: 250px;
+      resize: vertical;
+    }
+
+    .preview-area {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      padding: 15px;
+      min-height: 200px;
+      max-height: 350px;
+      overflow-y: auto;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #555;
+      white-space: pre-wrap;
+    }
+
+    .preview-area.empty {
+      color: #999;
+      font-style: italic;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Optimize button */
+    .optimize-section {
+      text-align: center;
+      margin: 30px 0;
+    }
+
+    /* Progress section */
+    .progress-section {
+      background: #f0f7ff;
+      border: 1px solid #b3d4fc;
+      border-radius: 8px;
+      padding: 25px;
+      margin-bottom: 30px;
+      display: none;
+    }
+
+    .progress-section.visible {
+      display: block;
+    }
+
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+
+    .progress-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1565c0;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .progress-round {
+      font-size: 13px;
+      color: #1976d2;
+      font-weight: 500;
+    }
+
+    .progress-bar-container {
+      background: #e3f2fd;
+      border-radius: 4px;
+      height: 8px;
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #2196F3, #4CAF50);
+      width: 0%;
+      transition: width 0.3s ease;
+    }
+
+    .progress-stage {
+      font-size: 13px;
+      color: #555;
+    }
+
+    /* Results section */
+    .results-section {
+      display: none;
+    }
+
+    .results-section.visible {
+      display: block;
+    }
+
+    .results-header {
+      border-bottom: 2px solid #e0e0e0;
+      padding-bottom: 15px;
+      margin-bottom: 25px;
+    }
+
+    .results-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 15px;
+    }
+
+    /* Score display */
+    .score-display {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      padding: 20px;
+      background: #f9f9f9;
+      border-radius: 8px;
+      margin-bottom: 25px;
+    }
+
+    .score-main {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .score-before,
+    .score-after {
+      text-align: center;
+    }
+
+    .score-label {
+      font-size: 11px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    .score-value {
+      font-size: 28px;
+      font-weight: 700;
+    }
+
+    .score-before .score-value {
+      color: #f57c00;
+    }
+
+    .score-after .score-value {
+      color: #2e7d32;
+    }
+
+    .score-arrow {
+      font-size: 24px;
+      color: #999;
+    }
+
+    .score-improvement {
+      padding: 8px 16px;
+      background: #e8f5e9;
+      border-radius: 4px;
+      color: #2e7d32;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .score-bars {
+      flex: 1;
+      padding-left: 30px;
+      border-left: 1px solid #e0e0e0;
+    }
+
+    .score-bar-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .score-bar-label {
+      font-size: 12px;
+      color: #666;
+      width: 50px;
+    }
+
+    .score-bar-track {
+      flex: 1;
+      height: 8px;
+      background: #e0e0e0;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .score-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+
+    .score-bar-fill.before {
+      background: #f57c00;
+    }
+
+    .score-bar-fill.after {
+      background: #2e7d32;
+    }
+
+    /* Results grid */
+    .results-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 25px;
+      margin-bottom: 30px;
+    }
+
+    .results-card {
+      background: #fafafa;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 20px;
+    }
+
+    .card-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 15px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .card-title.strengths {
+      color: #2e7d32;
+    }
+
+    .card-title.gaps {
+      color: #c62828;
+    }
+
+    .card-title.recommendations {
+      color: #1565c0;
+    }
+
+    .item-list {
+      list-style: none;
+    }
+
+    .item-list li {
+      padding: 10px 0;
+      border-bottom: 1px solid #eee;
+      font-size: 14px;
+      color: #555;
+      line-height: 1.5;
+    }
+
+    .item-list li:last-child {
+      border-bottom: none;
+    }
+
+    .item-list li::before {
+      margin-right: 8px;
+    }
+
+    .strengths-list li::before {
+      content: "+";
+      color: #2e7d32;
+      font-weight: bold;
+    }
+
+    .gaps-list li::before {
+      content: "-";
+      color: #c62828;
+      font-weight: bold;
+    }
+
+    .recommendation-item {
+      padding: 12px;
+      background: white;
+      border-radius: 4px;
+      margin-bottom: 10px;
+      border-left: 3px solid #1565c0;
+    }
+
+    .recommendation-priority {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .priority-high {
+      background: #ffebee;
+      color: #c62828;
+    }
+
+    .priority-medium {
+      background: #fff3e0;
+      color: #ef6c00;
+    }
+
+    .priority-low {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .recommendation-text {
+      font-size: 13px;
+      color: #333;
+      line-height: 1.5;
+    }
+
+    .recommendation-rationale {
+      font-size: 12px;
+      color: #666;
+      margin-top: 6px;
+      font-style: italic;
+    }
+
+    /* Resume comparison tabs */
+    .resume-comparison {
+      background: #fafafa;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .comparison-tabs {
+      display: flex;
+      background: #f0f0f0;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .tab-btn {
+      padding: 12px 20px;
+      background: transparent;
+      border: none;
+      font-size: 13px;
+      font-weight: 500;
+      color: #666;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab-btn:hover {
+      background: #e8e8e8;
+    }
+
+    .tab-btn.active {
+      background: white;
+      color: #4CAF50;
+      border-bottom: 2px solid #4CAF50;
+      margin-bottom: -1px;
+    }
+
+    .comparison-content {
+      padding: 20px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .resume-content {
+      white-space: pre-wrap;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #333;
+      display: none;
+    }
+
+    .resume-content.visible {
+      display: block;
+    }
+
+    .diff-view {
+      display: none;
+    }
+
+    .diff-view.visible {
+      display: block;
+    }
+
+    .diff-add {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .diff-remove {
+      background: #ffebee;
+      color: #c62828;
+      text-decoration: line-through;
+    }
+
+    /* Action buttons */
+    .results-actions {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      padding-top: 20px;
+      border-top: 1px solid #e0e0e0;
+    }
+
+    /* Export dropdown */
+    .export-dropdown {
+      position: relative;
+      display: inline-block;
+    }
+
+    .export-dropdown-content {
+      display: none;
+      position: absolute;
+      bottom: 100%;
+      left: 0;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+      min-width: 160px;
+      z-index: 10;
+      margin-bottom: 5px;
+    }
+
+    .export-dropdown-content.show {
+      display: block;
+    }
+
+    .export-dropdown-item {
+      display: block;
+      width: 100%;
+      padding: 10px 15px;
+      background: none;
+      border: none;
+      text-align: left;
+      font-size: 13px;
+      cursor: pointer;
+      color: #333;
+    }
+
+    .export-dropdown-item:hover {
+      background: #f5f5f5;
+    }
+
+    .export-dropdown-item:first-child {
+      border-radius: 4px 4px 0 0;
+    }
+
+    .export-dropdown-item:last-child {
+      border-radius: 0 0 4px 4px;
+    }
+
+    /* Error message */
+    .error-message {
+      background: #ffebee;
+      color: #c62828;
+      padding: 15px;
+      border-radius: 4px;
+      border: 1px solid #ef9a9a;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .error-message.visible {
+      display: block;
+    }
+
+    /* Loading spinner */
+    .loading-spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #ffffff;
+      border-top: 2px solid transparent;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-right: 8px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* File input */
+    .file-input {
+      display: none;
+    }
+
+    /* Queue Section Styles */
+    .queue-section {
+      margin-top: 40px;
+      padding-top: 30px;
+      border-top: 2px solid #e0e0e0;
+    }
+
+    .queue-section-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .queue-section-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .queue-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .queue-status-cards {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .queue-status-card {
+      background: #f9f9f9;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 15px;
+      text-align: center;
+    }
+
+    .queue-status-value {
+      font-size: 24px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .queue-status-label {
+      font-size: 11px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 4px;
+    }
+
+    .queue-status-card.pending .queue-status-value { color: #1565c0; }
+    .queue-status-card.processing .queue-status-value { color: #f57c00; }
+    .queue-status-card.completed .queue-status-value { color: #2e7d32; }
+    .queue-status-card.failed .queue-status-value { color: #c62828; }
+
+    .queue-progress-section {
+      background: #e3f2fd;
+      border: 1px solid #90caf9;
+      border-radius: 6px;
+      padding: 15px;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .queue-progress-section.visible {
+      display: block;
+    }
+
+    .queue-progress-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    .queue-progress-title {
+      font-weight: 600;
+      color: #1565c0;
+      font-size: 14px;
+    }
+
+    .queue-progress-count {
+      font-size: 13px;
+      color: #1976d2;
+    }
+
+    .queue-progress-bar {
+      height: 6px;
+      background: #bbdefb;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .queue-progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #2196f3, #4CAF50);
+      width: 0%;
+      transition: width 0.3s;
+    }
+
+    .queue-progress-current {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #666;
+    }
+
+    .queue-table-container {
+      background: #fafafa;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .queue-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .queue-table th {
+      text-align: left;
+      padding: 10px 16px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      background: #f0f0f0;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .queue-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid #eee;
+      font-size: 13px;
+      color: #333;
+    }
+
+    .queue-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .queue-table tr:hover {
+      background: #f5f5f5;
+    }
+
+    .queue-job-title {
+      font-weight: 500;
+    }
+
+    .queue-job-company {
+      color: #666;
+      font-size: 12px;
+    }
+
+    .queue-status-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 10px;
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+    }
+
+    .queue-status-badge.pending { background: #e3f2fd; color: #1565c0; }
+    .queue-status-badge.processing { background: #fff3e0; color: #ef6c00; }
+    .queue-status-badge.completed { background: #e8f5e9; color: #2e7d32; }
+    .queue-status-badge.failed { background: #ffebee; color: #c62828; }
+
+    .queue-score { font-weight: 600; }
+    .queue-score.high { color: #2e7d32; }
+    .queue-score.medium { color: #f57c00; }
+    .queue-score.low { color: #c62828; }
+
+    .queue-action-btn {
+      padding: 4px 10px;
+      border: none;
+      border-radius: 4px;
+      font-size: 11px;
+      cursor: pointer;
+      margin-right: 6px;
+    }
+
+    .queue-action-btn.view { background: #e3f2fd; color: #1565c0; }
+    .queue-action-btn.view:hover { background: #bbdefb; }
+    .queue-action-btn.remove { background: #ffebee; color: #c62828; }
+    .queue-action-btn.remove:hover { background: #ffcdd2; }
+
+    .queue-empty {
+      text-align: center;
+      padding: 40px 20px;
+      color: #888;
+    }
+
+    .queue-empty-icon {
+      font-size: 32px;
+      margin-bottom: 10px;
+      opacity: 0.5;
+    }
+
+    .queue-empty-text {
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation Header -->
+  <nav class="nav-header" style="background: white; border-bottom: 1px solid #e0e0e0; padding: 0 30px; position: sticky; top: 0; z-index: 100; margin: -20px -20px 20px -20px; width: calc(100% + 40px);">
+    <div style="max-width: 1400px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; height: 60px;">
+      <a href="./index.html" style="display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 600; color: #333; text-decoration: none;">
+        <div style="width: 32px; height: 32px; background: linear-gradient(135deg, #4CAF50, #2e7d32); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: white; font-size: 18px;">R</div>
+        Resume Optimizer
+      </a>
+      <div style="display: flex; gap: 8px;">
+        <a href="./index.html" style="padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; color: #666;">Dashboard</a>
+        <a href="./optimizer.html" style="padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; background: #e8f5e9; color: #2e7d32;">Optimizer</a>
+        <a href="./queue.html" style="padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; color: #666;">Queue</a>
+        <a href="./chat.html" style="padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; color: #666;">Chat</a>
+        <a href="./job-search.html" style="padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; color: #666;">Job Search</a>
+        <a href="./vault.html" style="padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; color: #666;">Vault</a>
+      </div>
+      <a href="./settings.html" style="padding: 8px; border-radius: 6px; text-decoration: none; color: #666; font-size: 18px;" title="Settings">&#9881;</a>
+    </div>
+  </nav>
+
+  <div class="container" style="margin-top: 0; padding-top: 20px;">
+    <h1>ATS Resume Optimizer</h1>
+    <p class="subtitle">Optimize your resume to better match job postings using AI-powered analysis</p>
+
+    <div class="error-message" id="errorMessage"></div>
+
+    <!-- Input Section -->
+    <div class="input-section">
+      <!-- Resume Input Panel -->
+      <div class="input-panel">
+        <div class="panel-header">
+          <span class="panel-title">Resume Input</span>
+          <div class="panel-actions">
+            <button class="btn btn-secondary" id="loadVaultBtn">Load from Vault</button>
+            <button class="btn btn-secondary" id="uploadResumeBtn">Upload New</button>
+            <input type="file" class="file-input" id="resumeFileInput" accept=".pdf,.docx,.txt,.md">
+          </div>
+        </div>
+        <div class="preview-area empty" id="resumePreview">
+          No resume loaded. Load from your vault or upload a file.
+        </div>
+      </div>
+
+      <!-- Job Posting Input Panel -->
+      <div class="input-panel">
+        <div class="panel-header">
+          <span class="panel-title">Job Posting Input</span>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Job Title</label>
+          <input type="text" class="form-input" id="jobTitle" placeholder="e.g., Senior Software Engineer">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Company</label>
+          <input type="text" class="form-input" id="jobCompany" placeholder="e.g., Acme Corp">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Job Description</label>
+          <textarea class="form-textarea" id="jobDescription" placeholder="Paste the full job description here..."></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="optimize-section">
+      <button class="btn btn-primary btn-large" id="optimizeBtn" disabled>
+        Optimize Now
+      </button>
+      <button class="btn btn-secondary btn-large" id="addToQueueBtn" style="margin-left: 15px;">
+        Add to Queue
+      </button>
+    </div>
+
+    <!-- Progress Section -->
+    <div class="progress-section" id="progressSection">
+      <div class="progress-header">
+        <span class="progress-title">Optimization in Progress</span>
+        <span class="progress-round" id="progressRound">Round 1/3</span>
+      </div>
+      <div class="progress-bar-container">
+        <div class="progress-bar-fill" id="progressBarFill"></div>
+      </div>
+      <div class="progress-stage" id="progressStage">Initializing...</div>
+    </div>
+
+    <!-- Results Section -->
+    <div class="results-section" id="resultsSection">
+      <div class="results-header">
+        <h2 class="results-title">Optimization Results</h2>
+      </div>
+
+      <!-- Score Display -->
+      <div class="score-display">
+        <div class="score-main">
+          <div class="score-before">
+            <div class="score-label">Before</div>
+            <div class="score-value" id="scoreBefore">--</div>
+          </div>
+          <div class="score-arrow">→</div>
+          <div class="score-after">
+            <div class="score-label">After</div>
+            <div class="score-value" id="scoreAfter">--</div>
+          </div>
+          <div class="score-improvement" id="scoreImprovement">+0%</div>
+        </div>
+        <div class="score-bars">
+          <div class="score-bar-row">
+            <span class="score-bar-label">Before</span>
+            <div class="score-bar-track">
+              <div class="score-bar-fill before" id="scoreBarBefore"></div>
+            </div>
+          </div>
+          <div class="score-bar-row">
+            <span class="score-bar-label">After</span>
+            <div class="score-bar-track">
+              <div class="score-bar-fill after" id="scoreBarAfter"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Results Grid -->
+      <div class="results-grid">
+        <!-- Strengths -->
+        <div class="results-card">
+          <h3 class="card-title strengths">Strengths</h3>
+          <ul class="item-list strengths-list" id="strengthsList"></ul>
+        </div>
+
+        <!-- Gaps -->
+        <div class="results-card">
+          <h3 class="card-title gaps">Gaps to Address</h3>
+          <ul class="item-list gaps-list" id="gapsList"></ul>
+        </div>
+      </div>
+
+      <!-- Recommendations -->
+      <div class="results-card" style="margin-bottom: 30px;">
+        <h3 class="card-title recommendations">Recommendations</h3>
+        <div id="recommendationsList"></div>
+      </div>
+
+      <!-- Resume Comparison -->
+      <div class="resume-comparison">
+        <div class="comparison-tabs">
+          <button class="tab-btn active" data-tab="side-by-side">Side-by-Side</button>
+          <button class="tab-btn" data-tab="before">Before</button>
+          <button class="tab-btn" data-tab="after">After</button>
+        </div>
+        <div class="comparison-content">
+          <div class="resume-content visible" id="sideBySideView">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+              <div>
+                <strong style="display: block; margin-bottom: 10px; color: #f57c00;">Original:</strong>
+                <div id="resumeOriginalSbs"></div>
+              </div>
+              <div>
+                <strong style="display: block; margin-bottom: 10px; color: #2e7d32;">Optimized:</strong>
+                <div id="resumeOptimizedSbs"></div>
+              </div>
+            </div>
+          </div>
+          <div class="resume-content" id="beforeView"></div>
+          <div class="resume-content" id="afterView"></div>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="results-actions">
+        <div class="export-dropdown">
+          <button class="btn btn-primary" id="exportBtn">Export Resume ▼</button>
+          <div class="export-dropdown-content" id="exportDropdown">
+            <button class="export-dropdown-item" id="exportMarkdownBtn">Download as Markdown</button>
+            <button class="export-dropdown-item" id="exportPdfBtn">Download as PDF</button>
+            <button class="export-dropdown-item" id="exportWordBtn">Download as Word</button>
+          </div>
+        </div>
+        <button class="btn btn-secondary" id="saveVaultBtn">Save to Vault</button>
+        <button class="btn btn-secondary" id="startNewBtn">Start New Optimization</button>
+      </div>
+    </div>
+
+    <!-- Queue Section -->
+    <div class="queue-section" id="queueSection">
+      <div class="queue-section-header">
+        <h2 class="queue-section-title">Job Queue</h2>
+        <div class="queue-actions">
+          <button class="btn btn-secondary" id="clearCompletedBtn">Clear Completed</button>
+          <button class="btn btn-primary" id="processAllBtn" disabled>Process All</button>
+        </div>
+      </div>
+
+      <!-- Status Cards -->
+      <div class="queue-status-cards">
+        <div class="queue-status-card pending">
+          <div class="queue-status-value" id="queuePendingCount">0</div>
+          <div class="queue-status-label">Pending</div>
+        </div>
+        <div class="queue-status-card processing">
+          <div class="queue-status-value" id="queueProcessingCount">0</div>
+          <div class="queue-status-label">Processing</div>
+        </div>
+        <div class="queue-status-card completed">
+          <div class="queue-status-value" id="queueCompletedCount">0</div>
+          <div class="queue-status-label">Completed</div>
+        </div>
+        <div class="queue-status-card failed">
+          <div class="queue-status-value" id="queueFailedCount">0</div>
+          <div class="queue-status-label">Failed</div>
+        </div>
+      </div>
+
+      <!-- Queue Progress -->
+      <div class="queue-progress-section" id="queueProgressSection">
+        <div class="queue-progress-header">
+          <span class="queue-progress-title">Processing Queue</span>
+          <span class="queue-progress-count" id="queueProgressCount">0/0</span>
+        </div>
+        <div class="queue-progress-bar">
+          <div class="queue-progress-fill" id="queueProgressFill"></div>
+        </div>
+        <div class="queue-progress-current" id="queueProgressCurrent">Initializing...</div>
+      </div>
+
+      <!-- Queue Table -->
+      <div class="queue-table-container">
+        <table class="queue-table">
+          <thead>
+            <tr>
+              <th>Job</th>
+              <th>Status</th>
+              <th>Score</th>
+              <th>Added</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="queueTableBody">
+            <!-- Jobs will be rendered here -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="./optimizer.js"></script>
+</body>
+</html>

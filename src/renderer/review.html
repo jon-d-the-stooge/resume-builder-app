@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Review Parsed Content</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f5f5f5;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      padding: 40px;
+    }
+
+    h1 {
+      color: #333;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+
+    .subtitle {
+      color: #666;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .warnings {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      border-radius: 4px;
+      padding: 15px;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    .warnings.visible {
+      display: block;
+    }
+
+    .warnings h3 {
+      color: #856404;
+      font-size: 16px;
+      margin-bottom: 10px;
+    }
+
+    .warning-item {
+      color: #856404;
+      font-size: 14px;
+      padding: 5px 0;
+      border-bottom: 1px solid #ffe69c;
+    }
+
+    .warning-item:last-child {
+      border-bottom: none;
+    }
+
+    .content-tree {
+      margin-bottom: 30px;
+    }
+
+    .job-entry {
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      margin-bottom: 20px;
+      background: #fafafa;
+    }
+
+    .job-header {
+      padding: 20px;
+      background: #f0f0f0;
+      border-bottom: 1px solid #ddd;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .job-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .job-meta {
+      font-size: 14px;
+      color: #666;
+      margin-top: 5px;
+    }
+
+    .confidence-badge {
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .confidence-high {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .confidence-medium {
+      background: #fff3cd;
+      color: #856404;
+    }
+
+    .confidence-low {
+      background: #ffebee;
+      color: #c62828;
+    }
+
+    .job-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn-icon {
+      background: white;
+      border: 1px solid #ddd;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+
+    .btn-icon:hover {
+      background: #f5f5f5;
+    }
+
+    .job-content {
+      padding: 20px;
+    }
+
+    .content-section {
+      margin-bottom: 20px;
+    }
+
+    .content-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #666;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .content-item {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+      padding: 12px;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: start;
+    }
+
+    .content-item-text {
+      flex: 1;
+      color: #333;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .content-item-actions {
+      display: flex;
+      gap: 5px;
+      margin-left: 10px;
+    }
+
+    .btn-small {
+      background: transparent;
+      border: none;
+      padding: 4px 8px;
+      cursor: pointer;
+      font-size: 12px;
+      color: #666;
+      transition: color 0.2s;
+    }
+
+    .btn-small:hover {
+      color: #333;
+    }
+
+    .btn-add {
+      background: #4CAF50;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 4px;
+      font-size: 13px;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+
+    .btn-add:hover {
+      background: #45a049;
+    }
+
+    .action-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 20px;
+      border-top: 1px solid #ddd;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .btn-primary {
+      background: #4CAF50;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #45a049;
+    }
+
+    .btn-secondary {
+      background: #f5f5f5;
+      color: #666;
+      border: 1px solid #ddd;
+    }
+
+    .btn-secondary:hover {
+      background: #eee;
+    }
+
+    .btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+    }
+
+    .modal.visible {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-content {
+      background: white;
+      border-radius: 8px;
+      padding: 30px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+
+    .modal-header {
+      font-size: 20px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 20px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .form-input,
+    .form-textarea,
+    .form-select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .form-textarea {
+      min-height: 100px;
+      resize: vertical;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 20px;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #999;
+    }
+
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Review Parsed Content</h1>
+    <p class="subtitle">Review and edit the extracted content before saving to your vault</p>
+
+    <div style="margin-bottom: 20px; text-align: center;">
+      <a href="./index.html" style="color: #4CAF50; text-decoration: none; font-size: 14px; margin-right: 20px;">← Home</a>
+      <a href="./search.html" style="color: #4CAF50; text-decoration: none; font-size: 14px; margin-right: 20px;">Search</a>
+      <a href="./settings.html" style="color: #4CAF50; text-decoration: none; font-size: 14px;">Settings</a>
+    </div>
+
+    <div class="warnings" id="warnings">
+      <h3>⚠️ Parsing Warnings</h3>
+      <div id="warningsList"></div>
+    </div>
+
+    <div class="content-tree" id="contentTree">
+      <!-- Job entries will be dynamically inserted here -->
+    </div>
+
+    <div class="action-bar">
+      <button class="btn btn-secondary" id="cancelButton">Cancel & Discard</button>
+      <button class="btn btn-primary" id="confirmButton">Confirm & Save All</button>
+    </div>
+  </div>
+
+  <!-- Edit Modal -->
+  <div class="modal" id="editModal">
+    <div class="modal-content">
+      <h2 class="modal-header">Edit Content Item</h2>
+      <form id="editForm">
+        <div class="form-group">
+          <label class="form-label">Content Type</label>
+          <select class="form-select" id="editType" required>
+            <option value="job-entry">Job Entry</option>
+            <option value="accomplishment">Accomplishment</option>
+            <option value="skill">Skill</option>
+            <option value="education">Education</option>
+            <option value="certification">Certification</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Content</label>
+          <textarea class="form-textarea" id="editContent" required></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tags (comma-separated)</label>
+          <input type="text" class="form-input" id="editTags">
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="cancelEditButton">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Add Modal -->
+  <div class="modal" id="addModal">
+    <div class="modal-content">
+      <h2 class="modal-header">Add Content Item</h2>
+      <form id="addForm">
+        <div class="form-group">
+          <label class="form-label">Content Type</label>
+          <select class="form-select" id="addType" required>
+            <option value="accomplishment">Accomplishment</option>
+            <option value="skill">Skill</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Content</label>
+          <textarea class="form-textarea" id="addContent" required></textarea>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tags (comma-separated)</label>
+          <input type="text" class="form-input" id="addTags">
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="cancelAddButton">Cancel</button>
+          <button type="submit" class="btn btn-primary">Add Item</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="./review.js"></script>
+</body>
+</html>

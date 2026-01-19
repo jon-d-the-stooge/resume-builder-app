@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Job Search - Resume Optimizer</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f5f5f5;
+      min-height: 100vh;
+    }
+
+    /* Navigation Header */
+    .nav-header {
+      background: white;
+      border-bottom: 1px solid #e0e0e0;
+      padding: 0 30px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .nav-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+    }
+
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+      text-decoration: none;
+    }
+
+    .nav-brand-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #4CAF50, #2e7d32);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 18px;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 8px;
+    }
+
+    .nav-link {
+      padding: 8px 16px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      color: #666;
+      transition: all 0.2s;
+    }
+
+    .nav-link:hover {
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    .nav-link.active {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .nav-settings {
+      padding: 8px;
+      border-radius: 6px;
+      text-decoration: none;
+      color: #666;
+      font-size: 18px;
+      transition: all 0.2s;
+    }
+
+    .nav-settings:hover {
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    /* Main Content */
+    .main-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 30px;
+    }
+
+    /* Page Header */
+    .page-header {
+      margin-bottom: 30px;
+    }
+
+    .page-title {
+      font-size: 28px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .page-subtitle {
+      color: #666;
+      font-size: 14px;
+      margin-top: 4px;
+    }
+
+    /* Search Form */
+    .search-form {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      padding: 24px;
+      margin-bottom: 30px;
+    }
+
+    .search-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 16px;
+      align-items: end;
+    }
+
+    .form-group {
+      margin-bottom: 0;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      color: #333;
+      margin-bottom: 6px;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: border-color 0.2s;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: #4CAF50;
+    }
+
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-primary {
+      background: #4CAF50;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #43a047;
+    }
+
+    .btn-secondary {
+      background: white;
+      color: #666;
+      border: 1px solid #ddd;
+    }
+
+    .btn-secondary:hover {
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    .btn:disabled {
+      background: #e0e0e0;
+      color: #999;
+      cursor: not-allowed;
+    }
+
+    /* URL Extract Section */
+    .url-extract {
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid #e0e0e0;
+    }
+
+    .url-extract-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: #666;
+      margin-bottom: 12px;
+    }
+
+    .url-row {
+      display: flex;
+      gap: 12px;
+    }
+
+    .url-input {
+      flex: 1;
+      padding: 12px 14px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .url-input:focus {
+      outline: none;
+      border-color: #4CAF50;
+    }
+
+    /* Results Section */
+    .results-section {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      overflow: hidden;
+    }
+
+    .results-header {
+      padding: 16px 24px;
+      border-bottom: 1px solid #e0e0e0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .results-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .results-count {
+      font-size: 14px;
+      color: #666;
+    }
+
+    .results-list {
+      padding: 16px;
+    }
+
+    .job-card {
+      background: #fafafa;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 16px;
+      transition: all 0.2s;
+    }
+
+    .job-card:hover {
+      border-color: #4CAF50;
+      box-shadow: 0 2px 8px rgba(76, 175, 80, 0.1);
+    }
+
+    .job-card:last-child {
+      margin-bottom: 0;
+    }
+
+    .job-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+
+    .job-card-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .job-card-company {
+      font-size: 14px;
+      color: #666;
+      margin-top: 4px;
+    }
+
+    .job-card-location {
+      font-size: 13px;
+      color: #888;
+      margin-top: 2px;
+    }
+
+    .job-card-meta {
+      display: flex;
+      gap: 12px;
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 12px;
+    }
+
+    .job-card-description {
+      font-size: 14px;
+      color: #555;
+      line-height: 1.5;
+      margin-bottom: 16px;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .job-card-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .job-card-actions .btn {
+      padding: 8px 16px;
+      font-size: 13px;
+    }
+
+    .relevance-badge {
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .relevance-high {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .relevance-medium {
+      background: #fff3e0;
+      color: #ef6c00;
+    }
+
+    .relevance-low {
+      background: #f5f5f5;
+      color: #666;
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #888;
+    }
+
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .empty-state-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .empty-state-text {
+      font-size: 14px;
+    }
+
+    /* Loading State */
+    .loading-state {
+      text-align: center;
+      padding: 40px 20px;
+    }
+
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid #e0e0e0;
+      border-top-color: #4CAF50;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .loading-text {
+      font-size: 14px;
+      color: #666;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .nav-links {
+        display: none;
+      }
+
+      .search-row {
+        grid-template-columns: 1fr;
+      }
+
+      .url-row {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation Header -->
+  <nav class="nav-header">
+    <div class="nav-container">
+      <a href="./index.html" class="nav-brand">
+        <div class="nav-brand-icon">R</div>
+        Resume Optimizer
+      </a>
+      <div class="nav-links">
+        <a href="./index.html" class="nav-link">Dashboard</a>
+        <a href="./optimizer.html" class="nav-link">Optimizer</a>
+        <a href="./queue.html" class="nav-link">Queue</a>
+        <a href="./chat.html" class="nav-link">Chat</a>
+        <a href="./job-search.html" class="nav-link active">Job Search</a>
+        <a href="./vault.html" class="nav-link">Vault</a>
+      </div>
+      <a href="./settings.html" class="nav-settings" title="Settings">&#9881;</a>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Page Header -->
+    <div class="page-header">
+      <h1 class="page-title">Job Search</h1>
+      <p class="page-subtitle">Search across job boards and company career pages</p>
+    </div>
+
+    <!-- Search Form -->
+    <div class="search-form">
+      <div class="search-row">
+        <div class="form-group">
+          <label class="form-label">Job Title or Keywords</label>
+          <input type="text" class="form-input" id="searchTitle" placeholder="e.g., Software Engineer, Python">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Location</label>
+          <input type="text" class="form-input" id="searchLocation" placeholder="e.g., San Francisco, Remote">
+        </div>
+        <button class="btn btn-primary" id="searchBtn">Search Jobs</button>
+      </div>
+
+      <div class="url-extract">
+        <div class="url-extract-title">Or extract job details from a URL</div>
+        <div class="url-row">
+          <input type="text" class="url-input" id="extractUrl" placeholder="Paste a job posting URL...">
+          <button class="btn btn-secondary" id="extractBtn">Extract</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Results Section -->
+    <div class="results-section">
+      <div class="results-header">
+        <span class="results-title">Search Results</span>
+        <span class="results-count" id="resultsCount">0 jobs found</span>
+      </div>
+
+      <div class="results-list" id="resultsList">
+        <div class="empty-state" id="emptyState">
+          <div class="empty-state-icon">&#128269;</div>
+          <div class="empty-state-title">Search for Jobs</div>
+          <div class="empty-state-text">Enter keywords and location to find matching jobs</div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="./job-search.js"></script>
+</body>
+</html>

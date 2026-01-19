@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Resume Vault - Resume Optimizer</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f5f5f5;
+      min-height: 100vh;
+    }
+
+    /* Navigation Header */
+    .nav-header {
+      background: white;
+      border-bottom: 1px solid #e0e0e0;
+      padding: 0 30px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .nav-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+    }
+
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+      text-decoration: none;
+    }
+
+    .nav-brand-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #4CAF50, #2e7d32);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 18px;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 8px;
+    }
+
+    .nav-link {
+      padding: 8px 16px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      color: #666;
+      transition: all 0.2s;
+    }
+
+    .nav-link:hover {
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    .nav-link.active {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .nav-settings {
+      padding: 8px;
+      border-radius: 6px;
+      text-decoration: none;
+      color: #666;
+      font-size: 18px;
+      transition: all 0.2s;
+    }
+
+    .nav-settings:hover {
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    /* Main Content */
+    .main-content {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 30px;
+    }
+
+    /* Page Header */
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+    }
+
+    .page-title {
+      font-size: 28px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .page-subtitle {
+      color: #666;
+      font-size: 14px;
+      margin-top: 4px;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-primary {
+      background: #4CAF50;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #43a047;
+    }
+
+    .btn-secondary {
+      background: white;
+      color: #666;
+      border: 1px solid #ddd;
+    }
+
+    .btn-secondary:hover {
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    /* Filter Bar */
+    .filter-bar {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      padding: 20px 24px;
+      margin-bottom: 24px;
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .filter-label {
+      font-size: 14px;
+      font-weight: 500;
+      color: #666;
+    }
+
+    .filter-select {
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      background: white;
+      cursor: pointer;
+    }
+
+    .filter-select:focus {
+      outline: none;
+      border-color: #4CAF50;
+    }
+
+    .search-input {
+      flex: 1;
+      min-width: 200px;
+      padding: 10px 14px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: #4CAF50;
+    }
+
+    /* Content Grid */
+    .content-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 20px;
+    }
+
+    /* Content Card */
+    .content-card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      overflow: hidden;
+      transition: all 0.2s;
+    }
+
+    .content-card:hover {
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    }
+
+    .card-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #f0f0f0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .card-type-badge {
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .type-job_entry {
+      background: #e3f2fd;
+      color: #1565c0;
+    }
+
+    .type-accomplishment {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .type-skill {
+      background: #f3e5f5;
+      color: #7b1fa2;
+    }
+
+    .type-education {
+      background: #fff3e0;
+      color: #ef6c00;
+    }
+
+    .type-certification {
+      background: #fce4ec;
+      color: #c2185b;
+    }
+
+    .card-date {
+      font-size: 12px;
+      color: #888;
+    }
+
+    .card-body {
+      padding: 16px 20px;
+    }
+
+    .card-content {
+      font-size: 14px;
+      color: #333;
+      line-height: 1.5;
+      margin-bottom: 12px;
+    }
+
+    .card-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+
+    .card-tag {
+      padding: 4px 10px;
+      background: #f5f5f5;
+      border-radius: 12px;
+      font-size: 12px;
+      color: #666;
+    }
+
+    .card-metadata {
+      font-size: 13px;
+      color: #666;
+    }
+
+    .card-metadata-item {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+
+    .card-metadata-label {
+      color: #888;
+    }
+
+    .card-footer {
+      padding: 12px 20px;
+      border-top: 1px solid #f0f0f0;
+      display: flex;
+      gap: 8px;
+    }
+
+    .card-action {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .card-action.edit {
+      background: #e3f2fd;
+      color: #1565c0;
+    }
+
+    .card-action.edit:hover {
+      background: #bbdefb;
+    }
+
+    .card-action.delete {
+      background: #ffebee;
+      color: #c62828;
+    }
+
+    .card-action.delete:hover {
+      background: #ffcdd2;
+    }
+
+    /* Empty State */
+    .empty-state {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 60px 20px;
+      color: #888;
+    }
+
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .empty-state-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .empty-state-text {
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+
+    /* Stats Bar */
+    .stats-bar {
+      display: flex;
+      gap: 24px;
+      margin-bottom: 24px;
+      padding: 16px 20px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .stat-value {
+      font-size: 20px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: #666;
+    }
+
+    /* Clear Vault Button */
+    .btn-danger {
+      background: #ffebee;
+      color: #c62828;
+      border: 1px solid #ef9a9a;
+    }
+
+    .btn-danger:hover {
+      background: #ffcdd2;
+    }
+
+    /* Confirmation Modal */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-overlay.visible {
+      display: flex;
+    }
+
+    .modal {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+      max-width: 420px;
+      width: 90%;
+      overflow: hidden;
+    }
+
+    .modal-header {
+      background: #ffebee;
+      padding: 20px 24px;
+      border-bottom: 1px solid #ef9a9a;
+    }
+
+    .modal-header h3 {
+      color: #c62828;
+      font-size: 18px;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .modal-body {
+      padding: 24px;
+    }
+
+    .modal-body p {
+      color: #333;
+      font-size: 14px;
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+
+    .modal-body .warning {
+      background: #fff3e0;
+      border: 1px solid #ffcc80;
+      border-radius: 6px;
+      padding: 12px;
+      color: #e65100;
+      font-size: 13px;
+      margin-bottom: 20px;
+    }
+
+    .confirm-input-group {
+      margin-bottom: 8px;
+    }
+
+    .confirm-input-group label {
+      display: block;
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 6px;
+    }
+
+    .confirm-input {
+      width: 100%;
+      padding: 10px 12px;
+      border: 2px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: monospace;
+    }
+
+    .confirm-input:focus {
+      outline: none;
+      border-color: #c62828;
+    }
+
+    .modal-footer {
+      padding: 16px 24px;
+      border-top: 1px solid #e0e0e0;
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+    }
+
+    .modal-footer .btn {
+      min-width: 100px;
+    }
+
+    .btn-confirm-danger {
+      background: #c62828;
+      color: white;
+    }
+
+    .btn-confirm-danger:hover:not(:disabled) {
+      background: #b71c1c;
+    }
+
+    .btn-confirm-danger:disabled {
+      background: #e0e0e0;
+      color: #999;
+      cursor: not-allowed;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .nav-links {
+        display: none;
+      }
+
+      .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+      }
+
+      .filter-bar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .content-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .stats-bar {
+        flex-wrap: wrap;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation Header -->
+  <nav class="nav-header">
+    <div class="nav-container">
+      <a href="./index.html" class="nav-brand">
+        <div class="nav-brand-icon">R</div>
+        Resume Optimizer
+      </a>
+      <div class="nav-links">
+        <a href="./index.html" class="nav-link">Dashboard</a>
+        <a href="./optimizer.html" class="nav-link">Optimizer</a>
+        <a href="./queue.html" class="nav-link">Queue</a>
+        <a href="./chat.html" class="nav-link">Chat</a>
+        <a href="./job-search.html" class="nav-link">Job Search</a>
+        <a href="./vault.html" class="nav-link active">Vault</a>
+      </div>
+      <a href="./settings.html" class="nav-settings" title="Settings">&#9881;</a>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Page Header -->
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Resume Vault</h1>
+        <p class="page-subtitle">Your resume building blocks - skills, experiences, and accomplishments</p>
+      </div>
+      <div class="header-actions">
+        <a href="./manual-entry.html" class="btn btn-secondary">Add Content</a>
+        <button class="btn btn-primary" id="uploadResumeBtn">Upload Resume</button>
+        <button class="btn btn-danger" id="clearVaultBtn">Clear Vault</button>
+      </div>
+    </div>
+
+    <!-- Stats Bar -->
+    <div class="stats-bar" id="statsBar">
+      <div class="stat-item">
+        <span class="stat-value" id="totalItems">0</span>
+        <span class="stat-label">Total Items</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value" id="jobCount">0</span>
+        <span class="stat-label">Job Entries</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value" id="accomplishmentCount">0</span>
+        <span class="stat-label">Accomplishments</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value" id="skillCount">0</span>
+        <span class="stat-label">Skills</span>
+      </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+      <div class="filter-group">
+        <span class="filter-label">Type:</span>
+        <select class="filter-select" id="typeFilter">
+          <option value="">All Types</option>
+          <option value="job_entry">Job Entries</option>
+          <option value="accomplishment">Accomplishments</option>
+          <option value="skill">Skills</option>
+          <option value="education">Education</option>
+          <option value="certification">Certifications</option>
+        </select>
+      </div>
+      <input type="text" class="search-input" id="searchInput" placeholder="Search content...">
+      <button class="btn btn-secondary" id="searchBtn">Search</button>
+    </div>
+
+    <!-- Content Grid -->
+    <div class="content-grid" id="contentGrid">
+      <div class="empty-state" id="emptyState">
+        <div class="empty-state-icon">&#128451;</div>
+        <div class="empty-state-title">Your vault is empty</div>
+        <div class="empty-state-text">Upload a resume or manually add content to get started</div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Clear Vault Confirmation Modal -->
+  <div class="modal-overlay" id="clearVaultModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>&#9888; Clear Entire Vault</h3>
+      </div>
+      <div class="modal-body">
+        <p>This will permanently delete <strong>all content</strong> from your vault including:</p>
+        <ul style="margin: 0 0 16px 20px; color: #666; font-size: 14px;">
+          <li>All job entries</li>
+          <li>All accomplishments</li>
+          <li>All skills</li>
+          <li>All education entries</li>
+          <li>All certifications</li>
+        </ul>
+        <div class="warning">
+          <strong>This action cannot be undone.</strong> Make sure you have a backup if you need this data.
+        </div>
+        <div class="confirm-input-group">
+          <label>Type <strong>delete</strong> to confirm:</label>
+          <input type="text" class="confirm-input" id="confirmDeleteInput" placeholder="delete" autocomplete="off">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelClearBtn">Cancel</button>
+        <button class="btn btn-confirm-danger" id="confirmClearBtn" disabled>Clear Vault</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="./vault.js"></script>
+</body>
+</html>

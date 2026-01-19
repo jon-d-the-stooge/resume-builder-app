@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Career Agent - Resume Optimizer</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f5f5f5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Navigation Header */
+    .nav-header {
+      background: white;
+      border-bottom: 1px solid #e0e0e0;
+      padding: 0 30px;
+      flex-shrink: 0;
+    }
+
+    .nav-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+    }
+
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+      text-decoration: none;
+    }
+
+    .nav-brand-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #4CAF50, #2e7d32);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 18px;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 8px;
+    }
+
+    .nav-link {
+      padding: 8px 16px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      color: #666;
+      transition: all 0.2s;
+    }
+
+    .nav-link:hover {
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    .nav-link.active {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .nav-settings {
+      padding: 8px;
+      border-radius: 6px;
+      text-decoration: none;
+      color: #666;
+      font-size: 18px;
+      transition: all 0.2s;
+    }
+
+    .nav-settings:hover {
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    /* Chat Container */
+    .chat-container {
+      flex: 1;
+      display: flex;
+      max-width: 1000px;
+      margin: 0 auto;
+      width: 100%;
+      padding: 20px;
+      gap: 20px;
+    }
+
+    /* Messages Area */
+    .messages-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      overflow: hidden;
+    }
+
+    .messages-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #e0e0e0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .agent-avatar {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #9c27b0, #673ab7);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 18px;
+    }
+
+    .agent-info h2 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .agent-info p {
+      font-size: 12px;
+      color: #666;
+    }
+
+    .messages-list {
+      flex: 1;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .message {
+      max-width: 85%;
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .message.user {
+      align-self: flex-end;
+      background: #4CAF50;
+      color: white;
+      border-bottom-right-radius: 4px;
+    }
+
+    .message.assistant {
+      align-self: flex-start;
+      background: #f5f5f5;
+      color: #333;
+      border-bottom-left-radius: 4px;
+    }
+
+    .message.typing {
+      display: flex;
+      gap: 4px;
+      padding: 16px 20px;
+    }
+
+    .typing-dot {
+      width: 8px;
+      height: 8px;
+      background: #999;
+      border-radius: 50%;
+      animation: typing-bounce 1.4s infinite ease-in-out;
+    }
+
+    .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+    .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+
+    @keyframes typing-bounce {
+      0%, 80%, 100% { transform: translateY(0); }
+      40% { transform: translateY(-6px); }
+    }
+
+    /* Skill inference suggestion */
+    .skill-inference-suggestion {
+      background: #e8f5e9;
+      border: 1px solid #a5d6a7;
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin: 8px 60px 8px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .skill-inference-suggestion span {
+      flex: 1;
+      font-size: 13px;
+      color: #2e7d32;
+    }
+
+    .inference-btn {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .inference-btn.yes {
+      background: #4CAF50;
+      color: white;
+    }
+
+    .inference-btn.yes:hover {
+      background: #43a047;
+    }
+
+    .inference-btn.no {
+      background: white;
+      color: #666;
+      border: 1px solid #ddd;
+    }
+
+    .inference-btn.no:hover {
+      background: #f5f5f5;
+    }
+
+    .inference-confirmed {
+      color: #2e7d32;
+      font-weight: 500;
+    }
+
+    .inference-error {
+      color: #c62828;
+    }
+
+    /* Vault actions summary */
+    .vault-actions-summary {
+      background: #f0f7ff;
+      border: 1px solid #90caf9;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin: 8px 60px 8px 20px;
+      font-size: 13px;
+      transition: opacity 0.3s ease;
+    }
+
+    .vault-action-success {
+      color: #2e7d32;
+      margin-bottom: 4px;
+    }
+
+    .vault-action-success:last-child {
+      margin-bottom: 0;
+    }
+
+    .vault-action-fail {
+      color: #c62828;
+    }
+
+    /* Job search results */
+    .job-search-results {
+      margin-bottom: 12px;
+    }
+
+    .job-search-title {
+      font-weight: 600;
+      color: #1565c0;
+      margin-bottom: 8px;
+    }
+
+    .job-search-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .job-search-link {
+      display: inline-block;
+      padding: 6px 12px;
+      background: #1976d2;
+      color: white;
+      text-decoration: none;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+      transition: background 0.2s;
+      cursor: pointer;
+    }
+
+    .job-search-link:hover {
+      background: #1565c0;
+    }
+
+    /* Job cards container */
+    .job-cards-container {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 12px;
+      max-height: 500px;
+      overflow-y: auto;
+    }
+
+    .job-card {
+      background: white;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 14px;
+      transition: box-shadow 0.2s;
+    }
+
+    .job-card:hover {
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .job-card-header {
+      margin-bottom: 8px;
+    }
+
+    .job-card-title {
+      font-weight: 600;
+      font-size: 14px;
+      color: #1565c0;
+      margin-bottom: 2px;
+    }
+
+    .job-card-company {
+      font-size: 13px;
+      color: #666;
+    }
+
+    .job-card-salary {
+      font-size: 13px;
+      font-weight: 500;
+      color: #2e7d32;
+      margin-bottom: 6px;
+    }
+
+    .job-card-tags {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .job-tag {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      background: #f5f5f5;
+      color: #666;
+    }
+
+    .job-tag.remote {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .job-tag.date {
+      background: #fff3e0;
+      color: #e65100;
+    }
+
+    .job-card-snippet {
+      font-size: 12px;
+      color: #555;
+      line-height: 1.4;
+      margin-bottom: 10px;
+    }
+
+    .job-card-actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .job-action-btn {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .job-action-btn.view {
+      background: #1976d2;
+      color: white;
+    }
+
+    .job-action-btn.view:hover {
+      background: #1565c0;
+    }
+
+    .job-action-btn.queue {
+      background: #4CAF50;
+      color: white;
+    }
+
+    .job-action-btn.queue:hover {
+      background: #43a047;
+    }
+
+    .job-action-btn.added {
+      background: #e0e0e0;
+      color: #666;
+      cursor: default;
+    }
+
+    .job-more-results {
+      font-size: 12px;
+      color: #666;
+      font-style: italic;
+      margin-top: 8px;
+      padding: 8px;
+      background: #f9f9f9;
+      border-radius: 4px;
+    }
+
+    .job-no-results {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 8px;
+    }
+
+    /* Markdown styling in messages */
+    .message.assistant h2,
+    .message.assistant h3,
+    .message.assistant h4 {
+      margin: 8px 0 4px 0;
+      color: #333;
+    }
+
+    .message.assistant h2 { font-size: 18px; }
+    .message.assistant h3 { font-size: 16px; }
+    .message.assistant h4 { font-size: 14px; }
+
+    .message.assistant p {
+      margin: 4px 0;
+    }
+
+    .message.assistant ul {
+      margin: 8px 0;
+      padding-left: 20px;
+    }
+
+    .message.assistant li {
+      margin: 4px 0;
+    }
+
+    .message.assistant strong {
+      font-weight: 600;
+    }
+
+    .welcome-message {
+      text-align: center;
+      padding: 40px 20px;
+      color: #666;
+    }
+
+    .welcome-message h3 {
+      font-size: 20px;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .welcome-message p {
+      font-size: 14px;
+      margin-bottom: 24px;
+    }
+
+    .quick-prompts {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: center;
+    }
+
+    .quick-prompt {
+      padding: 10px 16px;
+      background: #f5f5f5;
+      border: 1px solid #e0e0e0;
+      border-radius: 20px;
+      font-size: 13px;
+      color: #666;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .quick-prompt:hover {
+      background: #e8f5e9;
+      border-color: #4CAF50;
+      color: #2e7d32;
+    }
+
+    /* Input Area */
+    .input-area {
+      padding: 16px 20px;
+      border-top: 1px solid #e0e0e0;
+      display: flex;
+      gap: 12px;
+    }
+
+    .message-input {
+      flex: 1;
+      padding: 12px 16px;
+      border: 1px solid #e0e0e0;
+      border-radius: 24px;
+      font-size: 14px;
+      font-family: inherit;
+      resize: none;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .message-input:focus {
+      border-color: #4CAF50;
+    }
+
+    .send-btn {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: #4CAF50;
+      border: none;
+      color: white;
+      font-size: 20px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .send-btn:hover {
+      background: #43a047;
+    }
+
+    .send-btn:disabled {
+      background: #e0e0e0;
+      cursor: not-allowed;
+    }
+
+    /* Context Sidebar */
+    .context-sidebar {
+      width: 280px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      padding: 20px;
+      height: fit-content;
+    }
+
+    .sidebar-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .context-section {
+      margin-bottom: 20px;
+    }
+
+    .context-section-title {
+      font-size: 12px;
+      font-weight: 500;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 8px;
+    }
+
+    .context-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .context-tag {
+      padding: 4px 10px;
+      background: #f5f5f5;
+      border-radius: 12px;
+      font-size: 12px;
+      color: #666;
+    }
+
+    .context-empty {
+      font-size: 13px;
+      color: #999;
+      font-style: italic;
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .context-sidebar {
+        display: none;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .nav-links {
+        display: none;
+      }
+
+      .chat-container {
+        padding: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation Header -->
+  <nav class="nav-header">
+    <div class="nav-container">
+      <a href="./index.html" class="nav-brand">
+        <div class="nav-brand-icon">R</div>
+        Resume Optimizer
+      </a>
+      <div class="nav-links">
+        <a href="./index.html" class="nav-link">Dashboard</a>
+        <a href="./optimizer.html" class="nav-link">Optimizer</a>
+        <a href="./queue.html" class="nav-link">Queue</a>
+        <a href="./chat.html" class="nav-link active">Chat</a>
+        <a href="./job-search.html" class="nav-link">Job Search</a>
+        <a href="./vault.html" class="nav-link">Vault</a>
+      </div>
+      <a href="./settings.html" class="nav-settings" title="Settings">&#9881;</a>
+    </div>
+  </nav>
+
+  <!-- Chat Container -->
+  <div class="chat-container">
+    <!-- Messages Area -->
+    <div class="messages-area">
+      <div class="messages-header">
+        <div class="agent-avatar">&#129302;</div>
+        <div class="agent-info">
+          <h2>Career Agent</h2>
+          <p>Your personal recruiter, advocate, and coach</p>
+        </div>
+      </div>
+
+      <div class="messages-list" id="messagesList">
+        <div class="welcome-message" id="welcomeMessage">
+          <h3>Hi! I'm your Career Agent</h3>
+          <p>I can help with job searching, interview prep, salary negotiation, and career advice. What would you like to work on today?</p>
+          <div class="quick-prompts">
+            <button class="quick-prompt" data-prompt="Help me find jobs that match my skills and experience">Find Jobs</button>
+            <button class="quick-prompt" data-prompt="Help me prepare for a job interview">Interview Prep</button>
+            <button class="quick-prompt" data-prompt="What salary should I ask for based on my experience?">Salary Advice</button>
+            <button class="quick-prompt" data-prompt="Review my resume and suggest improvements">Resume Review</button>
+            <button class="quick-prompt" data-prompt="Help me explore career paths I haven't considered">Explore Careers</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="input-area">
+        <textarea
+          class="message-input"
+          id="messageInput"
+          placeholder="Type your message..."
+          rows="1"
+        ></textarea>
+        <button class="send-btn" id="sendBtn" title="Send message">&#10148;</button>
+      </div>
+    </div>
+
+    <!-- Context Sidebar -->
+    <div class="context-sidebar">
+      <h3 class="sidebar-title">&#128161; What I Know About You</h3>
+
+      <div class="context-section">
+        <div class="context-section-title">Skills</div>
+        <div class="context-tags" id="knownSkills">
+          <span class="context-empty">Chat with me to learn more</span>
+        </div>
+      </div>
+
+      <div class="context-section">
+        <div class="context-section-title">Preferences</div>
+        <div class="context-tags" id="knownPreferences">
+          <span class="context-empty">No preferences learned yet</span>
+        </div>
+      </div>
+
+      <div class="context-section">
+        <div class="context-section-title">Goals</div>
+        <div class="context-tags" id="knownGoals">
+          <span class="context-empty">Tell me about your goals</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="./chat.js"></script>
+</body>
+</html>

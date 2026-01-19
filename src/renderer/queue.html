@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Job Queue - Resume Optimizer</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f5f5f5;
+      min-height: 100vh;
+    }
+
+    /* Navigation Header */
+    .nav-header {
+      background: white;
+      border-bottom: 1px solid #e0e0e0;
+      padding: 0 30px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .nav-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+    }
+
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+      text-decoration: none;
+    }
+
+    .nav-brand-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #4CAF50, #2e7d32);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 18px;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 8px;
+    }
+
+    .nav-link {
+      padding: 8px 16px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      color: #666;
+      transition: all 0.2s;
+    }
+
+    .nav-link:hover {
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    .nav-link.active {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .nav-settings {
+      padding: 8px;
+      border-radius: 6px;
+      text-decoration: none;
+      color: #666;
+      font-size: 18px;
+      transition: all 0.2s;
+    }
+
+    .nav-settings:hover {
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    /* Main Content */
+    .main-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 30px;
+    }
+
+    /* Page Header */
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+    }
+
+    .page-title {
+      font-size: 28px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .page-subtitle {
+      color: #666;
+      font-size: 14px;
+      margin-top: 4px;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-primary {
+      background: #4CAF50;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #43a047;
+    }
+
+    .btn-secondary {
+      background: white;
+      color: #666;
+      border: 1px solid #ddd;
+    }
+
+    .btn-secondary:hover {
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    .btn-danger {
+      background: #f44336;
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #d32f2f;
+    }
+
+    .btn:disabled {
+      background: #e0e0e0;
+      color: #999;
+      cursor: not-allowed;
+    }
+
+    /* Status Cards */
+    .status-cards {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 30px;
+    }
+
+    .status-card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .status-card-value {
+      font-size: 32px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .status-card-label {
+      font-size: 13px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .status-card.pending .status-card-value { color: #1565c0; }
+    .status-card.processing .status-card-value { color: #f57c00; }
+    .status-card.completed .status-card-value { color: #2e7d32; }
+    .status-card.failed .status-card-value { color: #c62828; }
+
+    /* Progress Section */
+    .progress-section {
+      background: #e3f2fd;
+      border: 1px solid #90caf9;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 30px;
+      display: none;
+    }
+
+    .progress-section.visible {
+      display: block;
+    }
+
+    .progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .progress-title {
+      font-weight: 600;
+      color: #1565c0;
+    }
+
+    .progress-count {
+      font-size: 14px;
+      color: #1976d2;
+    }
+
+    .progress-bar {
+      height: 8px;
+      background: #bbdefb;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #2196f3, #4CAF50);
+      width: 0%;
+      transition: width 0.3s;
+    }
+
+    .progress-current {
+      margin-top: 8px;
+      font-size: 13px;
+      color: #666;
+    }
+
+    /* Queue Table */
+    .queue-section {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      overflow: hidden;
+    }
+
+    .queue-header {
+      padding: 16px 24px;
+      border-bottom: 1px solid #e0e0e0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .queue-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .queue-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .queue-table th {
+      text-align: left;
+      padding: 12px 24px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      background: #fafafa;
+      border-bottom: 1px solid #e0e0e0;
+    }
+
+    .queue-table td {
+      padding: 16px 24px;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 14px;
+      color: #333;
+    }
+
+    .queue-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .queue-table tr:hover {
+      background: #fafafa;
+    }
+
+    .job-title {
+      font-weight: 500;
+    }
+
+    .job-company {
+      color: #666;
+      font-size: 13px;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+    }
+
+    .status-badge.pending {
+      background: #e3f2fd;
+      color: #1565c0;
+    }
+
+    .status-badge.processing {
+      background: #fff3e0;
+      color: #ef6c00;
+    }
+
+    .status-badge.completed {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .status-badge.failed {
+      background: #ffebee;
+      color: #c62828;
+    }
+
+    .score-display {
+      font-weight: 600;
+    }
+
+    .score-high { color: #2e7d32; }
+    .score-medium { color: #f57c00; }
+    .score-low { color: #c62828; }
+
+    .action-btn {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 4px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .action-btn.view {
+      background: #e3f2fd;
+      color: #1565c0;
+    }
+
+    .action-btn.view:hover {
+      background: #bbdefb;
+    }
+
+    .action-btn.remove {
+      background: #ffebee;
+      color: #c62828;
+    }
+
+    .action-btn.remove:hover {
+      background: #ffcdd2;
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: #888;
+    }
+
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .empty-state-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .empty-state-text {
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+
+    /* Add Job Modal */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .modal-overlay.visible {
+      display: flex;
+    }
+
+    .modal {
+      background: white;
+      border-radius: 12px;
+      width: 100%;
+      max-width: 500px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    .modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid #e0e0e0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 24px;
+      color: #666;
+      cursor: pointer;
+    }
+
+    .modal-body {
+      padding: 24px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 500;
+      color: #333;
+      margin-bottom: 6px;
+    }
+
+    .form-input,
+    .form-textarea {
+      width: 100%;
+      padding: 10px 14px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+      transition: border-color 0.2s;
+    }
+
+    .form-input:focus,
+    .form-textarea:focus {
+      outline: none;
+      border-color: #4CAF50;
+    }
+
+    .form-textarea {
+      min-height: 120px;
+      resize: vertical;
+    }
+
+    .modal-footer {
+      padding: 16px 24px;
+      border-top: 1px solid #e0e0e0;
+      display: flex;
+      justify-content: flex-end;
+      gap: 12px;
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .status-cards {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 768px) {
+      .nav-links {
+        display: none;
+      }
+
+      .status-cards {
+        grid-template-columns: 1fr;
+      }
+
+      .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+      }
+
+      .queue-table {
+        display: block;
+        overflow-x: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation Header -->
+  <nav class="nav-header">
+    <div class="nav-container">
+      <a href="./index.html" class="nav-brand">
+        <div class="nav-brand-icon">R</div>
+        Resume Optimizer
+      </a>
+      <div class="nav-links">
+        <a href="./index.html" class="nav-link">Dashboard</a>
+        <a href="./optimizer.html" class="nav-link">Optimizer</a>
+        <a href="./queue.html" class="nav-link active">Queue</a>
+        <a href="./chat.html" class="nav-link">Chat</a>
+        <a href="./job-search.html" class="nav-link">Job Search</a>
+        <a href="./vault.html" class="nav-link">Vault</a>
+      </div>
+      <a href="./settings.html" class="nav-settings" title="Settings">&#9881;</a>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Page Header -->
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Job Queue</h1>
+        <p class="page-subtitle">Manage and process your job optimization queue</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-secondary" id="addJobBtn">Add Job</button>
+        <button class="btn btn-secondary" id="importCsvBtn">Import CSV</button>
+        <button class="btn btn-primary" id="processAllBtn" disabled>Process All</button>
+      </div>
+    </div>
+
+    <!-- Status Cards -->
+    <div class="status-cards">
+      <div class="status-card pending">
+        <div class="status-card-value" id="pendingCount">0</div>
+        <div class="status-card-label">Pending</div>
+      </div>
+      <div class="status-card processing">
+        <div class="status-card-value" id="processingCount">0</div>
+        <div class="status-card-label">Processing</div>
+      </div>
+      <div class="status-card completed">
+        <div class="status-card-value" id="completedCount">0</div>
+        <div class="status-card-label">Completed</div>
+      </div>
+      <div class="status-card failed">
+        <div class="status-card-value" id="failedCount">0</div>
+        <div class="status-card-label">Failed</div>
+      </div>
+    </div>
+
+    <!-- Progress Section -->
+    <div class="progress-section" id="progressSection">
+      <div class="progress-header">
+        <span class="progress-title">Processing Queue</span>
+        <span class="progress-count" id="progressCount">0/0</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <div class="progress-current" id="progressCurrent">Initializing...</div>
+    </div>
+
+    <!-- Queue Table -->
+    <div class="queue-section">
+      <div class="queue-header">
+        <span class="queue-title">All Jobs</span>
+        <button class="btn btn-secondary" id="clearCompletedBtn" style="padding: 6px 12px; font-size: 13px;">Clear Completed</button>
+      </div>
+
+      <div id="queueContent">
+        <table class="queue-table">
+          <thead>
+            <tr>
+              <th>Job</th>
+              <th>Status</th>
+              <th>Score</th>
+              <th>Added</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="queueTableBody">
+            <!-- Jobs will be rendered here -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- Add Job Modal -->
+  <div class="modal-overlay" id="addJobModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">Add Job to Queue</h3>
+        <button class="modal-close" id="closeModal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Job Title</label>
+          <input type="text" class="form-input" id="jobTitle" placeholder="e.g., Senior Software Engineer">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Company</label>
+          <input type="text" class="form-input" id="jobCompany" placeholder="e.g., Acme Corp">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Source URL (optional)</label>
+          <input type="text" class="form-input" id="jobUrl" placeholder="https://...">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Job Description</label>
+          <textarea class="form-textarea" id="jobDescription" placeholder="Paste the job description here..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancelAddJob">Cancel</button>
+        <button class="btn btn-primary" id="submitAddJob">Add to Queue</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="./queue.js"></script>
+</body>
+</html>

@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Resume Optimizer - Dashboard</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f5f5f5;
+      min-height: 100vh;
+    }
+
+    /* Navigation Header */
+    .nav-header {
+      background: white;
+      border-bottom: 1px solid #e0e0e0;
+      padding: 0 30px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .nav-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+    }
+
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+      text-decoration: none;
+    }
+
+    .nav-brand-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #4CAF50, #2e7d32);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 18px;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 8px;
+    }
+
+    .nav-link {
+      padding: 8px 16px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      color: #666;
+      transition: all 0.2s;
+    }
+
+    .nav-link:hover {
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    .nav-link.active {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .nav-settings {
+      padding: 8px;
+      border-radius: 6px;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: #666;
+      font-size: 18px;
+      transition: all 0.2s;
+    }
+
+    .nav-settings:hover {
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    /* Main Content */
+    .main-content {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 30px;
+    }
+
+    /* Dashboard Header */
+    .dashboard-header {
+      margin-bottom: 30px;
+    }
+
+    .dashboard-title {
+      font-size: 28px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .dashboard-subtitle {
+      color: #666;
+      font-size: 14px;
+    }
+
+    /* Status Banner */
+    .status-banner {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-bottom: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .status-banner.success {
+      background: #e8f5e9;
+      border-color: #4CAF50;
+    }
+
+    .status-banner.error {
+      background: #ffebee;
+      border-color: #f44336;
+    }
+
+    .status-banner-content {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .status-banner-icon {
+      font-size: 20px;
+    }
+
+    .status-banner-text {
+      font-size: 14px;
+      color: #333;
+    }
+
+    .status-banner-action {
+      padding: 8px 16px;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 13px;
+      cursor: pointer;
+      text-decoration: none;
+      color: #333;
+      transition: all 0.2s;
+    }
+
+    .status-banner-action:hover {
+      background: #f5f5f5;
+    }
+
+    /* Dashboard Grid */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+    }
+
+    /* Dashboard Card */
+    .dashboard-card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      overflow: hidden;
+      transition: all 0.2s;
+    }
+
+    .dashboard-card:hover {
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    }
+
+    .card-header {
+      padding: 20px 24px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .card-title-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .card-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+
+    .card-icon.profile { background: #e3f2fd; }
+    .card-icon.optimize { background: #e8f5e9; }
+    .card-icon.queue { background: #fff3e0; }
+    .card-icon.chat { background: #f3e5f5; }
+    .card-icon.search { background: #e0f7fa; }
+    .card-icon.vault { background: #fce4ec; }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .card-badge {
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .badge-success {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .badge-warning {
+      background: #fff3e0;
+      color: #ef6c00;
+    }
+
+    .badge-info {
+      background: #e3f2fd;
+      color: #1565c0;
+    }
+
+    .card-body {
+      padding: 20px 24px;
+    }
+
+    .card-description {
+      font-size: 14px;
+      color: #666;
+      line-height: 1.5;
+      margin-bottom: 20px;
+    }
+
+    /* Stats Row */
+    .stats-row {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    .stat-item {
+      flex: 1;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Form Elements in Cards */
+    .card-input-group {
+      margin-bottom: 16px;
+    }
+
+    .card-input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+
+    .card-input:focus {
+      outline: none;
+      border-color: #4CAF50;
+      box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+    }
+
+    .card-input::placeholder {
+      color: #999;
+    }
+
+    .card-textarea {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+      min-height: 80px;
+      resize: vertical;
+      transition: all 0.2s;
+    }
+
+    .card-textarea:focus {
+      outline: none;
+      border-color: #4CAF50;
+      box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.1);
+    }
+
+    /* Card Footer/Actions */
+    .card-footer {
+      padding: 16px 24px;
+      background: #fafafa;
+      border-top: 1px solid #f0f0f0;
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn {
+      padding: 10px 18px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-primary {
+      background: #4CAF50;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #43a047;
+    }
+
+    .btn-secondary {
+      background: white;
+      color: #666;
+      border: 1px solid #ddd;
+    }
+
+    .btn-secondary:hover {
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: #4CAF50;
+      padding: 10px 14px;
+    }
+
+    .btn-ghost:hover {
+      background: #e8f5e9;
+    }
+
+    .btn:disabled {
+      background: #e0e0e0;
+      color: #999;
+      cursor: not-allowed;
+    }
+
+    .btn-full {
+      flex: 1;
+      justify-content: center;
+    }
+
+    /* Queue List in Card */
+    .queue-list {
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .queue-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .queue-item:last-child {
+      border-bottom: none;
+    }
+
+    .queue-item-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .queue-item-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: #333;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .queue-item-company {
+      font-size: 12px;
+      color: #888;
+    }
+
+    .queue-item-status {
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+    }
+
+    .status-pending {
+      background: #f5f5f5;
+      color: #666;
+    }
+
+    .status-processing {
+      background: #e3f2fd;
+      color: #1565c0;
+    }
+
+    .status-completed {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .status-failed {
+      background: #ffebee;
+      color: #c62828;
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 20px;
+      color: #888;
+    }
+
+    .empty-state-icon {
+      font-size: 32px;
+      margin-bottom: 8px;
+      opacity: 0.5;
+    }
+
+    .empty-state-text {
+      font-size: 14px;
+    }
+
+    /* Recent Activity */
+    .recent-activity {
+      list-style: none;
+    }
+
+    .activity-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .activity-item:last-child {
+      border-bottom: none;
+    }
+
+    .activity-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #4CAF50;
+    }
+
+    .activity-dot.score-high { background: #2e7d32; }
+    .activity-dot.score-medium { background: #f57c00; }
+    .activity-dot.score-low { background: #c62828; }
+
+    .activity-text {
+      flex: 1;
+      font-size: 14px;
+      color: #333;
+    }
+
+    .activity-score {
+      font-size: 14px;
+      font-weight: 600;
+      color: #2e7d32;
+    }
+
+    /* Loading Skeleton */
+    .skeleton {
+      background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+      background-size: 200% 100%;
+      animation: skeleton-loading 1.5s infinite;
+      border-radius: 4px;
+    }
+
+    .skeleton-text {
+      height: 14px;
+      margin-bottom: 8px;
+    }
+
+    .skeleton-stat {
+      height: 24px;
+      width: 60px;
+    }
+
+    @keyframes skeleton-loading {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    /* Profile Card Specifics */
+    .profile-vault-path {
+      background: #f5f5f5;
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-family: monospace;
+      color: #666;
+      margin-bottom: 16px;
+      word-break: break-all;
+    }
+
+    .profile-vault-path.not-set {
+      color: #999;
+      font-style: italic;
+      font-family: inherit;
+    }
+
+    /* Chat Preview */
+    .chat-preview {
+      background: #f9f9f9;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .chat-message {
+      font-size: 14px;
+      color: #666;
+      line-height: 1.5;
+      font-style: italic;
+    }
+
+    /* Quick Actions */
+    .quick-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .quick-action {
+      padding: 8px 14px;
+      background: #f5f5f5;
+      border: none;
+      border-radius: 20px;
+      font-size: 13px;
+      color: #666;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .quick-action:hover {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    /* Feature Card - Full Width */
+    .feature-card {
+      grid-column: 1 / -1;
+    }
+
+    @media (min-width: 1200px) {
+      .feature-card {
+        grid-column: span 2;
+      }
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .nav-container {
+        flex-wrap: wrap;
+        height: auto;
+        padding: 12px 0;
+        gap: 12px;
+      }
+
+      .nav-links {
+        order: 3;
+        width: 100%;
+        justify-content: center;
+        flex-wrap: wrap;
+      }
+
+      .main-content {
+        padding: 20px;
+      }
+
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .stats-row {
+        flex-wrap: wrap;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation Header -->
+  <nav class="nav-header">
+    <div class="nav-container">
+      <a href="./index.html" class="nav-brand">
+        <div class="nav-brand-icon">R</div>
+        Resume Optimizer
+      </a>
+      <div class="nav-links">
+        <a href="./index.html" class="nav-link active">Dashboard</a>
+        <a href="./optimizer.html" class="nav-link">Optimizer</a>
+        <a href="./queue.html" class="nav-link">Queue</a>
+        <a href="./chat.html" class="nav-link">Chat</a>
+        <a href="./job-search.html" class="nav-link">Job Search</a>
+        <a href="./vault.html" class="nav-link">Vault</a>
+      </div>
+      <a href="./settings.html" class="nav-settings" title="Settings">&#9881;</a>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Dashboard Header -->
+    <header class="dashboard-header">
+      <h1 class="dashboard-title">Dashboard</h1>
+      <p class="dashboard-subtitle">Your resume optimization command center</p>
+    </header>
+
+    <!-- Status Banner (shown conditionally) -->
+    <div class="status-banner" id="statusBanner" style="display: none;">
+      <div class="status-banner-content">
+        <span class="status-banner-icon" id="statusIcon"></span>
+        <span class="status-banner-text" id="statusText"></span>
+      </div>
+      <a href="#" class="status-banner-action" id="statusAction"></a>
+    </div>
+
+    <!-- Dashboard Grid -->
+    <div class="dashboard-grid">
+      <!-- Profile Status Card -->
+      <div class="dashboard-card">
+        <div class="card-header">
+          <div class="card-title-row">
+            <div class="card-icon profile">&#128100;</div>
+            <h2 class="card-title">Profile Status</h2>
+          </div>
+          <span class="card-badge badge-success" id="profileBadge">Loading...</span>
+        </div>
+        <div class="card-body">
+          <div class="profile-vault-path" id="vaultPath">Loading vault path...</div>
+          <div class="stats-row">
+            <div class="stat-item">
+              <div class="stat-value" id="statJobs">-</div>
+              <div class="stat-label">Job Entries</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="statSkills">-</div>
+              <div class="stat-label">Skills</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="statAccomp">-</div>
+              <div class="stat-label">Accomplishments</div>
+            </div>
+          </div>
+        </div>
+        <div class="card-footer">
+          <button class="btn btn-secondary btn-full" id="uploadResumeBtn">Upload Resume</button>
+          <a href="./vault.html" class="btn btn-ghost">View Vault</a>
+        </div>
+      </div>
+
+      <!-- Quick Optimize Card -->
+      <div class="dashboard-card">
+        <div class="card-header">
+          <div class="card-title-row">
+            <div class="card-icon optimize">&#9889;</div>
+            <h2 class="card-title">Quick Optimize</h2>
+          </div>
+        </div>
+        <div class="card-body">
+          <p class="card-description">Optimize your resume for a specific job posting. Paste a job URL or description to get started.</p>
+          <div class="card-input-group">
+            <input type="text" class="card-input" id="quickJobUrl" placeholder="Paste job URL or title...">
+          </div>
+          <div class="card-input-group">
+            <textarea class="card-textarea" id="quickJobDesc" placeholder="Or paste the job description here..."></textarea>
+          </div>
+        </div>
+        <div class="card-footer">
+          <button class="btn btn-primary btn-full" id="quickOptimizeBtn">Optimize Resume</button>
+        </div>
+      </div>
+
+      <!-- Job Queue Card -->
+      <div class="dashboard-card">
+        <div class="card-header">
+          <div class="card-title-row">
+            <div class="card-icon queue">&#128203;</div>
+            <h2 class="card-title">Job Queue</h2>
+          </div>
+          <span class="card-badge badge-info" id="queueBadge">0 pending</span>
+        </div>
+        <div class="card-body">
+          <div class="queue-list" id="queueList">
+            <div class="empty-state">
+              <div class="empty-state-icon">&#128196;</div>
+              <div class="empty-state-text">No jobs in queue</div>
+            </div>
+          </div>
+        </div>
+        <div class="card-footer">
+          <button class="btn btn-primary" id="processQueueBtn" disabled>Process All</button>
+          <a href="./queue.html" class="btn btn-secondary">Manage Queue</a>
+        </div>
+      </div>
+
+      <!-- Career Agent Card -->
+      <div class="dashboard-card">
+        <div class="card-header">
+          <div class="card-title-row">
+            <div class="card-icon chat">&#128172;</div>
+            <h2 class="card-title">Career Agent</h2>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="chat-preview">
+            <p class="chat-message">"Hi! I'm your career agent. I can help with job searching, interview prep, salary negotiation, and career advice. What would you like to work on?"</p>
+          </div>
+          <div class="quick-actions">
+            <button class="quick-action" data-prompt="Help me find jobs that match my skills">Find Jobs</button>
+            <button class="quick-action" data-prompt="Help me prepare for an interview">Interview Prep</button>
+            <button class="quick-action" data-prompt="What salary should I ask for?">Salary Advice</button>
+          </div>
+        </div>
+        <div class="card-footer">
+          <a href="./chat.html" class="btn btn-primary btn-full">Start Conversation</a>
+        </div>
+      </div>
+
+      <!-- Job Search Card -->
+      <div class="dashboard-card">
+        <div class="card-header">
+          <div class="card-title-row">
+            <div class="card-icon search">&#128269;</div>
+            <h2 class="card-title">Job Search</h2>
+          </div>
+        </div>
+        <div class="card-body">
+          <p class="card-description">Search across multiple job boards and company career pages. Find opportunities that match your profile.</p>
+          <div class="card-input-group">
+            <input type="text" class="card-input" id="jobSearchTitle" placeholder="Job title or keywords...">
+          </div>
+          <div class="card-input-group">
+            <input type="text" class="card-input" id="jobSearchLocation" placeholder="Location (optional)">
+          </div>
+        </div>
+        <div class="card-footer">
+          <button class="btn btn-primary btn-full" id="searchJobsBtn">Search Jobs</button>
+        </div>
+      </div>
+
+      <!-- Recent Optimizations Card -->
+      <div class="dashboard-card">
+        <div class="card-header">
+          <div class="card-title-row">
+            <div class="card-icon vault">&#128200;</div>
+            <h2 class="card-title">Recent Optimizations</h2>
+          </div>
+        </div>
+        <div class="card-body">
+          <ul class="recent-activity" id="recentActivity">
+            <div class="empty-state">
+              <div class="empty-state-icon">&#128202;</div>
+              <div class="empty-state-text">No recent optimizations</div>
+            </div>
+          </ul>
+        </div>
+        <div class="card-footer">
+          <a href="./queue.html" class="btn btn-secondary btn-full">View All Results</a>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Hidden file input for resume upload -->
+  <input type="file" id="resumeFileInput" style="display: none;" accept=".pdf,.docx,.txt">
+
+  <script src="./app.js"></script>
+</body>
+</html>
