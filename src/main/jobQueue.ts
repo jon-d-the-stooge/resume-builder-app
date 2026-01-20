@@ -128,6 +128,15 @@ export class JobQueue {
    * Adds a job to the queue
    */
   async enqueue(input: QueueJobInput): Promise<QueuedJob> {
+    // DEBUG: Log what we receive
+    console.log('[JobQueue.enqueue] Input received:', JSON.stringify({
+      hasSourceUrl: !!input.sourceUrl,
+      company: input.company,
+      title: input.title,
+      rawDescriptionLength: input.rawDescription?.length ?? 0,
+      rawDescriptionPreview: input.rawDescription?.substring(0, 100)
+    }));
+
     const job: QueuedJob = {
       id: this.generateJobId(),
       sourceUrl: input.sourceUrl,
@@ -141,6 +150,13 @@ export class JobQueue {
       retryCount: 0,
       maxRetries: 3
     };
+
+    // DEBUG: Log the created job
+    console.log('[JobQueue.enqueue] Job created:', JSON.stringify({
+      id: job.id,
+      hasRawDescription: !!job.rawDescription,
+      rawDescLength: job.rawDescription?.length ?? 0
+    }));
 
     // Insert based on priority (higher priority first)
     const insertIndex = this.queue.findIndex(q => q.priority < job.priority);
@@ -420,6 +436,12 @@ export class JobQueue {
       savedAt: new Date().toISOString()
     };
 
+    // DEBUG: Log what we're saving
+    console.log('[JobQueue.save] Saving queue with', this.queue.length, 'jobs');
+    this.queue.forEach((j, i) => {
+      console.log(`[JobQueue.save] Job ${i}: id=${j.id}, rawDescLen=${j.rawDescription?.length ?? 'MISSING'}`);
+    });
+
     fs.writeFileSync(fullPath, JSON.stringify(data, null, 2), 'utf-8');
   }
 
@@ -455,7 +477,11 @@ export class JobQueue {
         }
       }
 
+      // DEBUG: Log loaded jobs with rawDescription status
       console.log(`Loaded ${this.queue.length} jobs from queue`);
+      this.queue.forEach((j, i) => {
+        console.log(`[JobQueue.load] Job ${i}: id=${j.id}, rawDescLen=${j.rawDescription?.length ?? 'MISSING'}`);
+      });
     } catch (error) {
       console.error('Failed to load job queue:', error);
     }

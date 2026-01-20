@@ -415,10 +415,10 @@ uploadResumeBtn.addEventListener('click', async () => {
 
 // Quick Optimize Button
 quickOptimizeBtn.addEventListener('click', async () => {
-  const jobTitle = quickJobUrl.value.trim();
+  const jobInput = quickJobUrl.value.trim();
   const jobDesc = quickJobDesc.value.trim();
 
-  if (!jobDesc && !jobTitle) {
+  if (!jobDesc && !jobInput) {
     showStatusBanner('error', 'Please enter a job title or description', 'Dismiss', '#');
     statusAction.onclick = (e) => { e.preventDefault(); hideStatusBanner(); };
     return;
@@ -435,13 +435,64 @@ quickOptimizeBtn.addEventListener('click', async () => {
     return;
   }
 
-  // Store job data and navigate to optimizer
-  sessionStorage.setItem('quickOptimize', JSON.stringify({
-    title: jobTitle || 'Job Position',
-    description: jobDesc
-  }));
+  // Check if input is a URL - if so, extract job data first
+  const isUrl = jobInput.startsWith('http://') || jobInput.startsWith('https://');
 
-  window.location.href = './optimizer.html';
+  if (isUrl) {
+    // Show loading state
+    quickOptimizeBtn.disabled = true;
+    quickOptimizeBtn.textContent = 'Extracting...';
+
+    try {
+      const result = await ipcRenderer.invoke('extract-job-from-url', jobInput);
+
+      if (!result.success) {
+        showStatusBanner('error', `Failed to extract job: ${result.message || result.error}`, 'Dismiss', '#');
+        statusAction.onclick = (e) => { e.preventDefault(); hideStatusBanner(); };
+        return;
+      }
+
+      const job = result.job;
+
+      // Build full description from structured fields
+      const parts = [job.description || ''];
+      if (job.requirements?.length) {
+        parts.push('', '## Requirements');
+        parts.push(...job.requirements.map(r => `- ${r}`));
+      }
+      if (job.preferredQualifications?.length) {
+        parts.push('', '## Preferred Qualifications');
+        parts.push(...job.preferredQualifications.map(q => `- ${q}`));
+      }
+      if (job.responsibilities?.length) {
+        parts.push('', '## Responsibilities');
+        parts.push(...job.responsibilities.map(r => `- ${r}`));
+      }
+
+      sessionStorage.setItem('quickOptimize', JSON.stringify({
+        title: job.title || 'Job Position',
+        company: job.company,
+        description: parts.filter(l => l !== '').join('\n')
+      }));
+
+      window.location.href = './optimizer.html';
+    } catch (error) {
+      console.error('Error extracting job from URL:', error);
+      showStatusBanner('error', `Failed to extract job: ${error.message}`, 'Dismiss', '#');
+      statusAction.onclick = (e) => { e.preventDefault(); hideStatusBanner(); };
+    } finally {
+      quickOptimizeBtn.disabled = false;
+      quickOptimizeBtn.textContent = 'Quick Optimize';
+    }
+  } else {
+    // Not a URL - treat as job title (original behavior)
+    sessionStorage.setItem('quickOptimize', JSON.stringify({
+      title: jobInput || 'Job Position',
+      description: jobDesc
+    }));
+
+    window.location.href = './optimizer.html';
+  }
 });
 
 // Process Queue Button

@@ -317,11 +317,11 @@ function createJobCard(job) {
     card.appendChild(meta);
   }
 
-  // Description
-  if (job.description) {
+  // Description (use description or snippet for search results)
+  if (job.description || job.snippet) {
     const desc = document.createElement('div');
     desc.className = 'job-card-description';
-    desc.textContent = job.description;
+    desc.textContent = job.description || job.snippet;
     card.appendChild(desc);
   }
 
@@ -332,13 +332,13 @@ function createJobCard(job) {
   const addToQueueBtn = document.createElement('button');
   addToQueueBtn.className = 'btn btn-primary';
   addToQueueBtn.textContent = 'Add to Queue';
-  addToQueueBtn.onclick = () => addToQueue(job);
+  addToQueueBtn.onclick = () => addToQueue(job, addToQueueBtn);
   actions.appendChild(addToQueueBtn);
 
   const optimizeBtn = document.createElement('button');
   optimizeBtn.className = 'btn btn-secondary';
   optimizeBtn.textContent = 'Optimize Now';
-  optimizeBtn.onclick = () => optimizeNow(job);
+  optimizeBtn.onclick = () => optimizeNow(job, optimizeBtn);
   actions.appendChild(optimizeBtn);
 
   if (job.url) {
@@ -401,13 +401,65 @@ function showEmpty(title, text) {
 // Actions
 // =============================================================================
 
-async function addToQueue(job) {
+async function addToQueue(job, button) {
+  // Check if job has full content (extracted jobs have structured arrays)
+  const hasFullContent = job.requirements?.length || job.responsibilities?.length || job.preferredQualifications?.length;
+  const sourceUrl = job.url || job.sourceUrl;
+
+  // If search result (no full content) and has URL, extract first
+  if (!hasFullContent && sourceUrl) {
+    console.log('[addToQueue] Search result detected, extracting full content from:', sourceUrl);
+
+    // Show loading state
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Extracting...';
+    }
+
+    try {
+      const result = await ipcRenderer.invoke('extract-job-from-url', sourceUrl);
+
+      if (result.success && result.job) {
+        // Use extracted job data
+        job = { ...job, ...result.job };
+        console.log('[addToQueue] Extraction successful, updated job fields:', {
+          reqCount: job.requirements?.length,
+          respCount: job.responsibilities?.length,
+          prefCount: job.preferredQualifications?.length
+        });
+      } else {
+        console.warn('[addToQueue] Extraction failed, falling back to original data:', result.error);
+      }
+    } catch (error) {
+      console.warn('[addToQueue] Extraction error, falling back to original data:', error.message);
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = 'Add to Queue';
+      }
+    }
+  }
+
+  // DEBUG: Log job object fields
+  console.log('[addToQueue] final job fields:', {
+    title: job.title,
+    descLen: job.description?.length,
+    reqCount: job.requirements?.length,
+    respCount: job.responsibilities?.length,
+    prefCount: job.preferredQualifications?.length,
+    allKeys: Object.keys(job)
+  });
+
   try {
     await ipcRenderer.invoke('job-queue-add', {
       title: job.title,
       company: job.company,
-      sourceUrl: job.url,
-      description: job.description
+      sourceUrl: job.url || job.sourceUrl,
+      description: job.description || job.snippet || '',
+      // Pass structured fields for full description reconstruction
+      requirements: job.requirements || [],
+      preferredQualifications: job.preferredQualifications || [],
+      responsibilities: job.responsibilities || []
     });
 
     // Save state after successful queue add
@@ -420,14 +472,76 @@ async function addToQueue(job) {
   }
 }
 
-function optimizeNow(job) {
+async function optimizeNow(job, button) {
   // Save current state before navigating
   savePageState();
+
+  // Check if job has full content:
+  // 1. Structured arrays from extraction (requirements, responsibilities)
+  // 2. Full description from API (> 1000 chars means it's not just a snippet)
+  const hasStructuredContent = job.requirements?.length || job.responsibilities?.length || job.preferredQualifications?.length;
+  const hasFullDescription = job.description && job.description.length > 1000;
+  const hasFullContent = hasStructuredContent || hasFullDescription;
+  const sourceUrl = job.url || job.sourceUrl;
+
+  // If we already have full description from API, use it directly
+  if (hasFullDescription && !hasStructuredContent) {
+    console.log('[optimizeNow] Using full description from API:', job.description.length, 'chars');
+  }
+
+  // Only try to extract if we just have a snippet (no full content) and have a URL
+  if (!hasFullContent && sourceUrl) {
+    console.log('[optimizeNow] Only have snippet, extracting full content from:', sourceUrl);
+
+    // Show loading state
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Extracting...';
+    }
+
+    try {
+      const result = await ipcRenderer.invoke('extract-job-from-url', sourceUrl);
+
+      if (result.success && result.job) {
+        // Use extracted job data
+        job = { ...job, ...result.job };
+        console.log('[optimizeNow] Extraction successful, updated job fields:', {
+          reqCount: job.requirements?.length,
+          respCount: job.responsibilities?.length,
+          prefCount: job.preferredQualifications?.length
+        });
+      } else {
+        console.warn('[optimizeNow] Extraction failed, using available content:', result.message || result.error);
+      }
+    } catch (error) {
+      console.warn('[optimizeNow] Extraction error, using available content:', error.message);
+    } finally {
+      if (button) {
+        button.disabled = false;
+        button.textContent = 'Optimize Now';
+      }
+    }
+  }
+
+  // Build full description for optimizer from structured fields (use snippet for search results)
+  const parts = [job.description || job.snippet || ''];
+  if (job.requirements?.length) {
+    parts.push('', '## Requirements');
+    parts.push(...job.requirements.map(r => `- ${r}`));
+  }
+  if (job.preferredQualifications?.length) {
+    parts.push('', '## Preferred Qualifications');
+    parts.push(...job.preferredQualifications.map(q => `- ${q}`));
+  }
+  if (job.responsibilities?.length) {
+    parts.push('', '## Responsibilities');
+    parts.push(...job.responsibilities.map(r => `- ${r}`));
+  }
 
   sessionStorage.setItem('quickOptimize', JSON.stringify({
     title: job.title,
     company: job.company,
-    description: job.description
+    description: parts.filter(l => l !== '').join('\n')
   }));
 
   window.location.href = './optimizer.html';

@@ -3,7 +3,10 @@
     "allow": [
       "Bash(npm run build:*)",
       "mcp__desktop-commander__read_file",
-      "Skill(feature-dev:feature-dev)"
+      "Skill(feature-dev:feature-dev)",
+      "mcp__playwright__browser_navigate",
+      "mcp__playwright__browser_evaluate",
+      "mcp__playwright__browser_wait_for"
     ]
   }
 }

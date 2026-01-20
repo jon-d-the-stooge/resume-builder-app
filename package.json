@@ -54,6 +54,7 @@
     "openai": "^4.20.0",
     "pdf-parse": "^1.1.1",
     "pdfkit": "^0.17.2",
+    "playwright-core": "^1.57.0",
     "zod": "^3.25.76"
   },
   "build": {

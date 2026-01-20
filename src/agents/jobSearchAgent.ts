@@ -21,7 +21,8 @@ export interface JobSearchResult {
   company: string;
   location: string;
   sourceUrl: string;
-  snippet: string;
+  snippet: string;           // Short preview for display (500 chars)
+  description?: string;      // Full description from API (if available)
   salary?: string;
   postedDate?: Date;
   remote?: boolean;
@@ -336,13 +337,15 @@ export class JobSearchAgent {
           salary = `$${Math.round(job.job_min_salary).toLocaleString()} - $${Math.round(job.job_max_salary).toLocaleString()}${period}`;
         }
 
+        const fullDescription = this.stripHtml(job.job_description || '');
         results.push({
           id: `jsearch-${job.job_id}`,
           title: job.job_title,
           company: job.employer_name,
           location: [job.job_city, job.job_state, job.job_country].filter(Boolean).join(', ') || 'Unknown',
           sourceUrl: job.job_apply_link || job.job_google_link,
-          snippet: this.stripHtml(job.job_description || '').substring(0, 500),
+          snippet: fullDescription.substring(0, 500),
+          description: fullDescription,  // Store full description from API
           salary,
           remote: job.job_is_remote || false,
           postedDate: job.job_posted_at_datetime_utc ? new Date(job.job_posted_at_datetime_utc) : undefined,
@@ -724,32 +727,63 @@ export class JobSearchAgent {
       }
     }
 
+    // DEBUG: Log content preview being sent to LLM
+    const contentPreview = content.substring(0, 500).replace(/\s+/g, ' ');
+    console.log(`[JobSearchAgent] Content preview: "${contentPreview}..."`);
+
     const response = await this.llmClient.complete({
       systemPrompt: `You are a job posting parser. Extract structured information from job postings.
 
+IMPORTANT: Only extract information that is EXPLICITLY stated in the provided content. Do NOT make up, invent, or hallucinate any information. If the content does not appear to be a job posting or is missing required fields, return: {"error": "Not a valid job posting"}
+
 Return a JSON object with these fields:
-- title: Job title (string)
-- company: Company name (string)
+- title: Job title (string) - MUST be explicitly stated
+- company: Company name (string) - MUST be explicitly stated
 - location: Location (string, include "Remote" if applicable)
-- description: Brief job description (string, 2-3 sentences)
-- requirements: Array of required qualifications (string[])
-- preferredQualifications: Array of preferred/nice-to-have qualifications (string[])
-- responsibilities: Array of job responsibilities (string[])
+- description: Brief job description (string, 2-3 sentences) - summarize from actual content
+- requirements: Array of required qualifications (string[]) - only include if explicitly listed
+- preferredQualifications: Array of preferred/nice-to-have qualifications (string[]) - only include if explicitly listed
+- responsibilities: Array of job responsibilities (string[]) - only include if explicitly listed
 - salary: Salary information if mentioned (string or null)
 - benefits: Array of benefits if mentioned (string[] or null)
 - remote: Is this a remote position? (boolean)
 - experienceLevel: Required experience level (string, e.g., "Senior", "Mid-level", "Entry")
 - jobType: Employment type (string, e.g., "Full-time", "Contract", "Part-time")
 
-Return ONLY valid JSON, no additional text.`,
+Return ONLY valid JSON, no additional text. If the content is not a job posting, return {"error": "Not a valid job posting"}.`,
       messages: [{
         role: 'user',
         content: `Extract job details from this posting:\n\n${content.substring(0, 10000)}`
       }]
     });
 
+    // DEBUG: Log LLM response
+    console.log(`[JobSearchAgent] LLM response: ${response.content.substring(0, 500)}`);
+
     try {
-      const extracted = this.llmClient.parseJsonResponse(response.content) as ExtractedJob;
+      const extracted = this.llmClient.parseJsonResponse(response.content) as ExtractedJob & { error?: string };
+
+      // DEBUG: Log extracted object
+      console.log(`[JobSearchAgent] Extracted:`, JSON.stringify({
+        title: extracted.title,
+        company: extracted.company,
+        error: extracted.error,
+        reqCount: extracted.requirements?.length,
+        respCount: extracted.responsibilities?.length
+      }));
+
+      // Check if LLM returned an error (content wasn't a valid job posting)
+      if (extracted.error) {
+        console.error('[JobSearchAgent] LLM reported:', extracted.error);
+        return null;
+      }
+
+      // Validate that we have minimum required fields
+      if (!extracted.title || !extracted.company) {
+        console.error('[JobSearchAgent] Extraction missing required fields (title/company)');
+        return null;
+      }
+
       // Preserve the source URL
       extracted.url = url;
       return extracted;

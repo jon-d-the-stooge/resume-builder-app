@@ -15,6 +15,7 @@ import { appStateStore } from './appStateStore';
 import { applicationsStore, ApplicationStatus } from './applicationsStore';
 import PDFDocument from 'pdfkit';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
+import { chromium, Browser } from 'playwright-core';
 
 let mainWindow: BrowserWindow | null = null;
 let parsedResumeData: ParsedResume | null = null;
@@ -636,11 +637,48 @@ ipcMain.handle('check-api-key-configured', async () => {
 ipcMain.handle('job-queue-add', async (event, jobData) => {
   try {
     await jobQueue.initialize();
+
+    // DEBUG: Log incoming data
+    console.log('[job-queue-add] Received:', JSON.stringify({
+      title: jobData.title,
+      descLen: jobData.description?.length,
+      reqCount: jobData.requirements?.length,
+      respCount: jobData.responsibilities?.length,
+      prefCount: jobData.preferredQualifications?.length
+    }));
+
+    // Build full description from structured fields if available
+    let rawDescription = jobData.description || '';
+
+    if (jobData.requirements?.length || jobData.responsibilities?.length || jobData.preferredQualifications?.length) {
+      const parts = [jobData.description || ''];
+
+      if (jobData.requirements?.length) {
+        parts.push('', '## Requirements');
+        parts.push(...jobData.requirements.map((r: string) => `- ${r}`));
+      }
+
+      if (jobData.preferredQualifications?.length) {
+        parts.push('', '## Preferred Qualifications');
+        parts.push(...jobData.preferredQualifications.map((q: string) => `- ${q}`));
+      }
+
+      if (jobData.responsibilities?.length) {
+        parts.push('', '## Responsibilities');
+        parts.push(...jobData.responsibilities.map((r: string) => `- ${r}`));
+      }
+
+      rawDescription = parts.filter(line => line !== '').join('\n');
+      console.log('[job-queue-add] Built rawDescription length:', rawDescription.length);
+    }
+
+    console.log('[job-queue-add] Final rawDescription length:', rawDescription.length);
+
     const job = await jobQueue.enqueue({
       sourceUrl: jobData.sourceUrl,
       company: jobData.company,
       title: jobData.title,
-      rawDescription: jobData.description,
+      rawDescription,
       priority: jobData.priority || 0
     });
 
@@ -1078,18 +1116,198 @@ ipcMain.handle('search-jobs', async (event, criteria) => {
   }
 });
 
-ipcMain.handle('extract-job-from-url', async (event, url, content) => {
-  try {
-    const extracted = await jobSearchAgent.extractJobFromUrl(url, content);
+// Find Chrome/Chromium executable path
+function findChromePath(): string | null {
+  const paths = [
+    // macOS
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Chromium.app/Contents/MacOS/Chromium',
+    '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge',
+    // Linux
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    // Windows
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+  ];
 
-    if (!extracted) {
-      return { success: false, message: 'Could not extract job details. Make sure the URL is a valid job posting and try again.' };
+  for (const chromePath of paths) {
+    if (fs.existsSync(chromePath)) {
+      return chromePath;
+    }
+  }
+  return null;
+}
+
+// Helper function for browser-based fetch using Playwright
+async function fetchWithBrowser(url: string): Promise<{ success: boolean; content?: string; error?: string }> {
+  console.log('[PlaywrightFetch] Fetching URL:', url);
+
+  const chromePath = findChromePath();
+  if (!chromePath) {
+    console.error('[PlaywrightFetch] No Chrome/Chromium found on system');
+    return { success: false, error: 'No Chrome or Chromium browser found. Please install Chrome.' };
+  }
+
+  console.log('[PlaywrightFetch] Using browser:', chromePath);
+
+  let browser: Browser | null = null;
+
+  try {
+    // Launch browser - use new headless mode that's harder for WAF to detect
+    browser = await chromium.launch({
+      executablePath: chromePath,
+      headless: false, // Use headed mode - WAF can't detect it
+      args: [
+        '--disable-blink-features=AutomationControlled',
+        '--disable-features=IsolateOrigins,site-per-process',
+        '--disable-infobars',
+        '--window-position=-2400,-2400' // Move window off-screen so user doesn't see it
+      ]
+    });
+
+    const context = await browser.newContext({
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      viewport: { width: 1280, height: 800 }
+    });
+
+    const page = await context.newPage();
+
+    // Navigate to the URL - use 'domcontentloaded' instead of 'networkidle'
+    // because some sites (IBM Careers) have continuous network activity
+    console.log('[PlaywrightFetch] Navigating to page...');
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+
+    // Wait for JS to render content - this is critical for dynamic sites
+    console.log('[PlaywrightFetch] Waiting for JS to render...');
+    await page.waitForTimeout(5000);
+
+    // Check for WAF/bot challenge pages and wait for resolution
+    // Covers: AWS WAF, Cloudflare, and other common challenge pages
+    const isChallengePage = (html: string, title: string): boolean => {
+      return html.includes('awsWafCookieDomainList') ||
+             html.includes('cf-browser-verification') ||
+             html.includes('challenge-running') ||
+             html.includes('Verifying you are human') ||
+             title.includes('Just a moment');
+    };
+
+    let html = await page.content();
+    let title = await page.title();
+
+    if (isChallengePage(html, title)) {
+      console.log('[PlaywrightFetch] Challenge page detected, waiting for resolution...');
+      // Wait longer and check periodically for the real page to load
+      for (let i = 0; i < 6; i++) {
+        await page.waitForTimeout(3000);
+        html = await page.content();
+        title = await page.title();
+        if (!isChallengePage(html, title)) {
+          console.log('[PlaywrightFetch] Challenge resolved');
+          break;
+        }
+        console.log(`[PlaywrightFetch] Still waiting for challenge... attempt ${i + 1}/6`);
+      }
     }
 
+    // First try JSON-LD structured data - most job sites have this for SEO
+    // It contains the full job description without "Read more" truncation
+    const jsonLdData = await page.evaluate(`() => {
+      const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+      for (const script of scripts) {
+        try {
+          const data = JSON.parse(script.textContent || '');
+          if (data['@type'] === 'JobPosting' || (Array.isArray(data) && data.some(d => d['@type'] === 'JobPosting'))) {
+            return script.textContent;
+          }
+        } catch {}
+      }
+      return null;
+    }`) as string | null;
+
+    if (jsonLdData) {
+      console.log('[PlaywrightFetch] Found JSON-LD JobPosting data');
+      try {
+        const parsed = JSON.parse(jsonLdData);
+        const job = Array.isArray(parsed) ? parsed.find(d => d['@type'] === 'JobPosting') : parsed;
+        if (job?.description) {
+          // Strip HTML from description and return structured content
+          const cleanDesc = job.description.replace(/<[^>]*>/g, ' ').replace(/&#\d+;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+          const structuredContent = [
+            `Title: ${job.title || ''}`,
+            `Company: ${job.hiringOrganization?.name || ''}`,
+            `Location: ${job.jobLocation?.address?.addressLocality || ''}, ${job.jobLocation?.address?.addressRegion || ''}`,
+            ``,
+            `Description:`,
+            cleanDesc,
+            ``,
+            job.qualifications ? `Qualifications: ${job.qualifications}` : '',
+            job.responsibilities ? `Responsibilities: ${job.responsibilities}` : ''
+          ].filter(Boolean).join('\n');
+
+          console.log(`[PlaywrightFetch] Extracted ${structuredContent.length} chars from JSON-LD`);
+          return { success: true, content: structuredContent };
+        }
+      } catch (e) {
+        console.warn('[PlaywrightFetch] Failed to parse JSON-LD:', e);
+      }
+    }
+
+    // Fallback: Get the rendered text content
+    const textContent = await page.evaluate('() => document.body?.innerText || ""') as string;
+
+    if (!textContent || textContent.length === 0) {
+      console.warn('[PlaywrightFetch] No text content extracted');
+      return { success: false, error: 'Page did not render content - may be blocked by WAF' };
+    }
+
+    console.log(`[PlaywrightFetch] Fetched ${textContent.length} chars from innerText`);
+
+    if (textContent.length < 200) {
+      console.warn('[PlaywrightFetch] Very little content extracted');
+      return { success: false, error: 'Page content did not load - may require login or manual verification' };
+    }
+
+    return { success: true, content: textContent };
+
+  } catch (error) {
+    console.error('[PlaywrightFetch] Error:', error);
+    return { success: false, error: (error as Error).message };
+  } finally {
+    if (browser) {
+      await browser.close();
+    }
+  }
+}
+
+ipcMain.handle('extract-job-from-url', async (event, url, content) => {
+  console.log('[JobExtract] Extracting:', url);
+  try {
+    // First attempt: try with provided content or let agent fetch
+    let extracted = await jobSearchAgent.extractJobFromUrl(url, content);
+
+    // If extraction failed and no content was provided, try browser-based fetch
+    // This handles WAF-protected sites like Workday, Greenhouse, etc.
+    if (!extracted && !content) {
+      console.log('[JobExtract] Simple fetch failed, trying browser...');
+      const browserResult = await fetchWithBrowser(url);
+
+      if (browserResult.success && browserResult.content) {
+        extracted = await jobSearchAgent.extractJobFromUrl(url, browserResult.content);
+      } else {
+        console.warn('[JobExtract] Browser fetch failed:', browserResult.error);
+      }
+    }
+
+    if (!extracted) {
+      return { success: false, message: 'Could not extract job details. The site may require login or have bot protection.' };
+    }
+
+    console.log('[JobExtract] Success:', extracted.title, 'at', extracted.company);
     return { success: true, job: extracted };
   } catch (error) {
-    console.error('Job extraction error:', error);
-    // Return structured error response instead of throwing
+    console.error('[JobExtract] Error:', error);
     return {
       success: false,
       message: `Error extracting job: ${(error as Error).message}`,

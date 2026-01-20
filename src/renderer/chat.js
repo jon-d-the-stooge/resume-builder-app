@@ -479,7 +479,11 @@ function createJobCard(job) {
         sourceUrl: job.sourceUrl,
         company: job.company,
         title: job.title,
-        rawDescription: job.snippet
+        description: job.snippet || job.description,
+        // Pass structured fields if available (from extracted jobs)
+        requirements: job.requirements || [],
+        preferredQualifications: job.preferredQualifications || [],
+        responsibilities: job.responsibilities || []
       });
       queueBtn.textContent = '✓ Added';
       queueBtn.disabled = true;
