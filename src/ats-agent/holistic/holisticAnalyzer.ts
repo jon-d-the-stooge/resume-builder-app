@@ -76,6 +76,9 @@ export async function analyzeHolistically(
 
   const result = llmClient.parseJsonResponse(response.content);
 
+  // Log raw response for debugging score issues
+  console.log('[HolisticAnalyzer] Raw LLM response overallFit:', result?.overallFit, 'type:', typeof result?.overallFit);
+
   return validateAndNormalizeResult(result);
 }
 
@@ -160,11 +163,39 @@ ${resume.content}
 Analyze these documents holistically. Identify semantic connections between the candidate's experience and the job requirements. Provide specific, actionable recommendations for reframing resume content to better match the job language while preserving accuracy.`;
 }
 
+/**
+ * Normalize a score value to a decimal between 0 and 1.
+ * Handles string numbers, percentages (>1), and invalid values.
+ */
+function normalizeScore(value: any): number {
+  // Handle string numbers (e.g., "0.75" or "75")
+  if (typeof value === 'string') {
+    const parsed = parseFloat(value);
+    if (!isNaN(parsed)) {
+      value = parsed;
+    } else {
+      console.warn('[HolisticAnalyzer] Invalid overallFit value:', value);
+      return 0;
+    }
+  }
+
+  if (typeof value !== 'number' || isNaN(value)) {
+    console.warn('[HolisticAnalyzer] Non-numeric overallFit:', value);
+    return 0;
+  }
+
+  // If value > 1, assume percentage (e.g., 75 instead of 0.75)
+  if (value > 1) {
+    console.warn('[HolisticAnalyzer] Converting percentage to decimal:', value);
+    value = value / 100;
+  }
+
+  return Math.max(0, Math.min(1, value));
+}
+
 function validateAndNormalizeResult(raw: any): HolisticAnalysisResult {
   return {
-    overallFit: typeof raw.overallFit === 'number'
-      ? Math.max(0, Math.min(1, raw.overallFit))
-      : 0,
+    overallFit: normalizeScore(raw.overallFit),
     fitAssessment: raw.fitAssessment || 'Analysis incomplete',
     connections: Array.isArray(raw.connections)
       ? raw.connections.map(normalizeConnection)
@@ -190,9 +221,7 @@ function normalizeConnection(raw: any): SemanticConnection {
     connectionType: ['direct', 'inferred', 'partial', 'missing'].includes(raw.connectionType)
       ? raw.connectionType
       : 'missing',
-    confidence: typeof raw.confidence === 'number'
-      ? Math.max(0, Math.min(1, raw.confidence))
-      : 0,
+    confidence: normalizeScore(raw.confidence),
     explanation: raw.explanation || ''
   };
 }

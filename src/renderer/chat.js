@@ -17,6 +17,7 @@ const knownGoals = document.getElementById('knownGoals');
 let isTyping = false;
 let conversationStarted = false;
 let pendingSkillInference = null;
+let conversationHistory = []; // Track last 50 messages for persistence
 
 // =============================================================================
 // Initialization
@@ -26,13 +27,19 @@ async function initChat() {
   // Load agent preferences for sidebar
   await loadAgentContext();
 
-  // Check for initial prompt from dashboard
+  // Check for initial prompt from dashboard first
   const initialPrompt = sessionStorage.getItem('chatPrompt');
   if (initialPrompt) {
     sessionStorage.removeItem('chatPrompt');
     messageInput.value = initialPrompt;
     await sendMessage();
+  } else {
+    // No initial prompt - try to restore previous conversation
+    await restorePageState();
   }
+
+  // Setup auto-save
+  setupAutoSave();
 }
 
 // =============================================================================
@@ -558,6 +565,19 @@ function addMessage(text, type, options = {}) {
 
   messagesList.appendChild(message);
 
+  // Track in conversation history for persistence (skip if restoring)
+  if (!options.isRestore) {
+    conversationHistory.push({
+      text,
+      type,
+      timestamp: new Date().toISOString()
+    });
+    // Keep only last 50 messages
+    if (conversationHistory.length > 50) {
+      conversationHistory = conversationHistory.slice(-50);
+    }
+  }
+
   // Add skill inference suggestion if detected
   if (options.skillSuggestion) {
     addSkillInferenceSuggestion(options.skillSuggestion);
@@ -755,6 +775,104 @@ function hideTyping() {
   if (typing) {
     typing.remove();
   }
+}
+
+// =============================================================================
+// State Persistence
+// =============================================================================
+
+async function savePageState() {
+  if (conversationHistory.length === 0) return;
+
+  try {
+    showAutoSaveIndicator('saving');
+
+    await ipcRenderer.invoke('app-state-save-page', {
+      page: 'chat',
+      data: {
+        conversationHistory,
+        conversationStarted
+      }
+    });
+
+    showAutoSaveIndicator('saved');
+  } catch (error) {
+    console.error('[chat.js] Error saving page state:', error);
+  }
+}
+
+function showAutoSaveIndicator(status) {
+  const indicator = document.getElementById('autoSaveIndicator');
+  if (!indicator) return;
+
+  const icon = indicator.querySelector('.save-icon');
+  const text = indicator.querySelector('.save-text');
+
+  if (status === 'saving') {
+    indicator.classList.add('visible', 'saving');
+    icon.textContent = '↻';
+    text.textContent = 'Saving...';
+  } else {
+    indicator.classList.remove('saving');
+    indicator.classList.add('visible');
+    icon.textContent = '✓';
+    text.textContent = 'Saved';
+
+    setTimeout(() => {
+      indicator.classList.remove('visible');
+    }, 2000);
+  }
+}
+
+async function restorePageState() {
+  try {
+    const result = await ipcRenderer.invoke('app-state-get-page', 'chat');
+
+    if (result.success && result.state && result.state.data) {
+      const { conversationHistory: savedHistory, conversationStarted: wasStarted } = result.state.data;
+
+      if (savedHistory && savedHistory.length > 0) {
+        // Restore conversation
+        conversationHistory = savedHistory;
+        conversationStarted = wasStarted || true;
+
+        // Hide welcome message
+        welcomeMessage.style.display = 'none';
+
+        // Re-render messages
+        for (const msg of savedHistory) {
+          addMessage(msg.text, msg.type, { isRestore: true });
+        }
+
+        console.log(`[chat.js] Restored ${savedHistory.length} messages`);
+      }
+    }
+  } catch (error) {
+    console.error('[chat.js] Error restoring page state:', error);
+  }
+}
+
+function setupAutoSave() {
+  // Auto-save every 30 seconds
+  setInterval(() => {
+    if (conversationHistory.length > 0) {
+      savePageState();
+    }
+  }, 30000);
+
+  // Save on visibility change (tab switch)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && conversationHistory.length > 0) {
+      savePageState();
+    }
+  });
+
+  // Save before unload
+  window.addEventListener('beforeunload', () => {
+    if (conversationHistory.length > 0) {
+      savePageState();
+    }
+  });
 }
 
 // =============================================================================

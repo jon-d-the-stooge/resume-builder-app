@@ -1,11 +1,16 @@
 /**
  * Queue Processor Service
  *
- * Bridges the job queue with the ATS optimization orchestrator.
- * Handles type conversions between queue domain and ATS domain.
+ * Bridges the job queue with the ATS holistic optimization system.
+ * Uses the holistic optimizer for better semantic understanding and resume rewriting.
  */
 
 import { ATSAgentOrchestrator } from '../ats-agent/orchestrator';
+import {
+  optimizeResume as holisticOptimize,
+  HolisticOptimizationResult,
+  OptimizationIteration
+} from '../ats-agent/holistic/orchestrator';
 import type {
   JobPosting,
   Resume,
@@ -14,6 +19,7 @@ import type {
   Gap,
   Strength
 } from '../ats-agent/types';
+import type { ReframingRecommendation } from '../ats-agent/holistic/holisticAnalyzer';
 import { jobQueue, QueuedJob, OptimizationResult } from './jobQueue';
 import { contentManager } from './contentManager';
 import { ContentType } from '../types';
@@ -65,10 +71,13 @@ export class QueueProcessor {
   }
 
   /**
-   * Processes a single queued job through ATS optimization
+   * Processes a single queued job through holistic ATS optimization
+   *
+   * Uses the holistic optimizer for better semantic understanding
+   * and to produce optimized resume content.
    *
    * @param job - The queued job to process
-   * @returns The optimization result with scores, matches, and recommendations
+   * @returns The optimization result with scores, matches, recommendations, and optimized content
    */
   async processJob(job: QueuedJob): Promise<OptimizationResult> {
     // 1. Convert QueuedJob → JobPosting (ATS domain)
@@ -77,17 +86,54 @@ export class QueueProcessor {
     // 2. Get resume content from vault
     const resume = await this.getResumeFromVault();
 
-    // 3. Run ATS analysis (single-shot for now)
-    const analysisResult = await this.getATSAgent().analyzeMatch(jobPosting, resume);
+    console.log('[QueueProcessor] Starting holistic optimization for:', job.title);
+    console.log('[QueueProcessor] Resume content length:', resume.content.length);
+    console.log('[QueueProcessor] Job description length:', jobPosting.description?.length || 0);
 
-    // 4. Build OptimizationResult for queue domain
-    const result = this.buildOptimizationResult(
-      job,
-      analysisResult.matchResult,
-      analysisResult.recommendations
+    // 3. Run holistic optimization (produces rewritten resume)
+    const llmClient = this.getLLMClient();
+    const holisticResult = await holisticOptimize(
+      jobPosting,
+      resume,
+      llmClient,
+      {
+        targetFit: 0.8,
+        maxIterations: 3,
+        minImprovement: 0.05
+      }
     );
 
+    console.log('[QueueProcessor] Holistic optimization complete');
+    console.log('[QueueProcessor] Final fit:', holisticResult.finalFit);
+    console.log('[QueueProcessor] Iterations:', holisticResult.iterations.length);
+
+    // 4. Build OptimizationResult from holistic result
+    const result = this.buildOptimizationResultFromHolistic(job, holisticResult);
+
     return result;
+  }
+
+  /**
+   * Gets a configured LLM client
+   */
+  private getLLMClient(): LLMClient {
+    const apiKey = settingsStore.getApiKey();
+    const provider = settingsStore.getProvider() || 'anthropic';
+
+    if (!apiKey) {
+      throw new Error('API key not configured. Please set your API key in Settings.');
+    }
+
+    const llmConfig: { apiKey: string; provider: 'anthropic' | 'openai'; model?: string } = {
+      apiKey,
+      provider
+    };
+    const defaultModel = settingsStore.getDefaultModel();
+    if (defaultModel) {
+      llmConfig.model = defaultModel;
+    }
+
+    return new LLMClient(llmConfig);
   }
 
   /**
@@ -233,7 +279,7 @@ export class QueueProcessor {
   }
 
   /**
-   * Builds the queue-domain OptimizationResult from ATS analysis
+   * Builds the queue-domain OptimizationResult from ATS analysis (legacy)
    */
   private buildOptimizationResult(
     job: QueuedJob,
@@ -249,6 +295,57 @@ export class QueueProcessor {
       gaps: this.convertGapsForQueue(matchResult.gaps),
       recommendations: this.extractRecommendationStrings(recommendations),
       optimizedContent: undefined, // Single-shot doesn't produce optimized content
+      processedAt: new Date()
+    };
+  }
+
+  /**
+   * Builds the queue-domain OptimizationResult from holistic optimization
+   */
+  private buildOptimizationResultFromHolistic(
+    job: QueuedJob,
+    holisticResult: HolisticOptimizationResult
+  ): OptimizationResult {
+    // Get the last iteration's analysis for strengths/gaps/recommendations
+    const lastIteration = holisticResult.iterations[holisticResult.iterations.length - 1];
+    const analysis = lastIteration?.analysis;
+
+    // Convert strengths to matched skills format
+    const matchedSkills = (analysis?.strengths || []).map((strength, index) => ({
+      name: strength,
+      importance: 1 - (index * 0.1) // Decreasing importance by position
+    }));
+
+    // Convert gaps to missing skills and gaps format
+    const gaps = (analysis?.gaps || []).map((gap, index) => ({
+      name: gap,
+      importance: 1 - (index * 0.1),
+      suggestion: `Consider addressing: "${gap}"`
+    }));
+
+    const missingSkills = gaps.map(g => ({
+      name: g.name,
+      importance: g.importance
+    }));
+
+    // Convert recommendations to strings, handling both ReframingRecommendation objects and strings
+    const recommendations = (analysis?.recommendations || []).map((rec: ReframingRecommendation) => {
+      if (typeof rec === 'string') return rec;
+      const priority = rec.priority ? `[${rec.priority.toUpperCase()}]` : '';
+      const suggestion = rec.suggestedReframe || '';
+      const rationale = rec.rationale ? ` - ${rec.rationale}` : '';
+      return `${priority} ${suggestion}${rationale}`.trim();
+    });
+
+    return {
+      jobId: job.id,
+      finalScore: holisticResult.finalFit,
+      previousScore: holisticResult.initialFit,
+      matchedSkills,
+      missingSkills,
+      gaps,
+      recommendations,
+      optimizedContent: holisticResult.finalResume?.content, // Now we have optimized content!
       processedAt: new Date()
     };
   }

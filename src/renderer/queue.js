@@ -43,6 +43,9 @@ async function initQueue() {
 
   // Set up IPC listener for progress updates
   ipcRenderer.on('queue-progress', handleProgressUpdate);
+
+  // Setup state persistence
+  setupStatePersistence();
 }
 
 // =============================================================================
@@ -239,12 +242,18 @@ async function clearCompleted() {
 }
 
 function viewJobResult(jobId) {
-  // Store job ID and navigate to results page (or open modal)
-  sessionStorage.setItem('viewJobResult', jobId);
-  // For now, alert the user - in Phase 2 we'll have a proper results page
   const job = jobs.find(j => j.id === jobId);
   if (job && job.result) {
-    alert(`Score: ${Math.round(job.result.finalScore * 100)}%\n\nMatched Skills: ${job.result.matchedSkills?.length || 0}\nGaps: ${job.result.gaps?.length || 0}`);
+    // Store complete job data for optimizer to load
+    sessionStorage.setItem('viewJobResult', JSON.stringify({
+      id: job.id,
+      title: job.title,
+      company: job.company,
+      description: job.rawDescription || job.description,
+      result: job.result
+    }));
+    // Navigate to optimizer page with viewResult flag
+    window.location.href = './optimizer.html?viewResult=true';
   }
 }
 
@@ -324,6 +333,64 @@ function formatDate(dateStr) {
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit'
+  });
+}
+
+// =============================================================================
+// State Persistence
+// =============================================================================
+
+async function savePageState() {
+  try {
+    showAutoSaveIndicator('saving');
+
+    await ipcRenderer.invoke('app-state-save-page', {
+      page: 'queue',
+      data: {
+        lastViewed: new Date().toISOString()
+      }
+    });
+
+    showAutoSaveIndicator('saved');
+  } catch (error) {
+    console.error('[queue.js] Error saving page state:', error);
+  }
+}
+
+function showAutoSaveIndicator(status) {
+  const indicator = document.getElementById('autoSaveIndicator');
+  if (!indicator) return;
+
+  const icon = indicator.querySelector('.save-icon');
+  const text = indicator.querySelector('.save-text');
+
+  if (status === 'saving') {
+    indicator.classList.add('visible', 'saving');
+    icon.textContent = '↻';
+    text.textContent = 'Saving...';
+  } else {
+    indicator.classList.remove('saving');
+    indicator.classList.add('visible');
+    icon.textContent = '✓';
+    text.textContent = 'Saved';
+
+    setTimeout(() => {
+      indicator.classList.remove('visible');
+    }, 2000);
+  }
+}
+
+function setupStatePersistence() {
+  // Save on visibility change (tab switch)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      savePageState();
+    }
+  });
+
+  // Save before unload
+  window.addEventListener('beforeunload', () => {
+    savePageState();
   });
 }
 

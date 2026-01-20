@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "mcp__desktop-commander__read_file",
+      "Skill(feature-dev:feature-dev)"
     ]
   }
 }

@@ -11,6 +11,8 @@ import { csvImporter } from './csvImporter';
 import { opusAgent, jobSearchAgent } from '../agents';
 import { queueProcessor } from './queueProcessor';
 import { settingsStore } from './settingsStore';
+import { appStateStore } from './appStateStore';
+import { applicationsStore, ApplicationStatus } from './applicationsStore';
 import PDFDocument from 'pdfkit';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
 
@@ -1595,6 +1597,164 @@ company: ${company || ''}
       success: false,
       error: (error as Error).message
     };
+  }
+});
+
+// ============================================================================
+// App State IPC Handlers (State Persistence)
+// ============================================================================
+
+ipcMain.handle('app-state-start-workflow', async (event, { type, currentPage, initialData }) => {
+  try {
+    const workflow = appStateStore.startWorkflow(type, currentPage, initialData || {});
+    return { success: true, workflow };
+  } catch (error) {
+    console.error('Start workflow error:', error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+ipcMain.handle('app-state-update-workflow', async (event, updates) => {
+  try {
+    const workflow = appStateStore.updateWorkflow(updates);
+    return { success: true, workflow };
+  } catch (error) {
+    console.error('Update workflow error:', error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+ipcMain.handle('app-state-get-workflow', async () => {
+  try {
+    const workflow = appStateStore.getWorkflow();
+    return { success: true, workflow };
+  } catch (error) {
+    console.error('Get workflow error:', error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+ipcMain.handle('app-state-clear-workflow', async () => {
+  try {
+    appStateStore.clearWorkflow();
+    return { success: true };
+  } catch (error) {
+    console.error('Clear workflow error:', error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+ipcMain.handle('app-state-save-page', async (event, { page, data }) => {
+  try {
+    const pageState = appStateStore.savePageState(page, data);
+    return { success: true, pageState };
+  } catch (error) {
+    console.error('Save page state error:', error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+ipcMain.handle('app-state-get-page', async (event, page) => {
+  try {
+    const pageState = appStateStore.getPageState(page);
+    return { success: true, pageState };
+  } catch (error) {
+    console.error('Get page state error:', error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+ipcMain.handle('app-state-get-continue-info', async () => {
+  try {
+    const info = appStateStore.getContinueInfo();
+    return { success: true, ...info };
+  } catch (error) {
+    console.error('Get continue info error:', error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+// ============================================================================
+// Applications IPC Handlers (Resume Storage)
+// ============================================================================
+
+ipcMain.handle('applications-list', async (event, statusFilter?: ApplicationStatus) => {
+  try {
+    const applications = applicationsStore.list(statusFilter);
+    const stats = applicationsStore.getStats();
+    return { success: true, applications, stats };
+  } catch (error) {
+    console.error('List applications error:', error);
+    return { success: false, error: (error as Error).message, applications: [], stats: null };
+  }
+});
+
+ipcMain.handle('applications-get', async (event, id: string) => {
+  try {
+    const application = applicationsStore.get(id);
+    if (!application) {
+      return { success: false, error: 'Application not found' };
+    }
+    return { success: true, application };
+  } catch (error) {
+    console.error('Get application error:', error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+ipcMain.handle('applications-save', async (event, data: {
+  jobTitle: string;
+  company: string;
+  jobDescription: string;
+  generatedResume: string;
+  score: number;
+  sourceUrl?: string;
+  metadata: {
+    iterations: number;
+    initialScore: number;
+  };
+}) => {
+  try {
+    const application = applicationsStore.save(data);
+    if (!application) {
+      return { success: false, error: 'Failed to save application. Is the vault configured?' };
+    }
+    return { success: true, application };
+  } catch (error) {
+    console.error('Save application error:', error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+ipcMain.handle('applications-update', async (event, { id, updates }: {
+  id: string;
+  updates: {
+    status?: ApplicationStatus;
+    notes?: string;
+  };
+}) => {
+  try {
+    const application = applicationsStore.update(id, updates);
+    if (!application) {
+      return { success: false, error: 'Application not found' };
+    }
+    return { success: true, application };
+  } catch (error) {
+    console.error('Update application error:', error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+ipcMain.handle('applications-delete', async (event, id: string) => {
+  try {
+    const deleted = applicationsStore.delete(id);
+    if (!deleted) {
+      return { success: false, error: 'Application not found' };
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Delete application error:', error);
+    return { success: false, error: (error as Error).message };
   }
 });
 

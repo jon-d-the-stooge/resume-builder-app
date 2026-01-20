@@ -14,13 +14,17 @@ const emptyState = document.getElementById('emptyState');
 // State
 let searchResults = [];
 let isSearching = false;
+let autoSaveInterval = null;
 
 // =============================================================================
 // Initialization
 // =============================================================================
 
 async function initJobSearch() {
-  // Check for search params from dashboard
+  // First try to restore previous state
+  const restored = await restorePageState();
+
+  // Then check for search params from dashboard (takes priority)
   const searchParams = sessionStorage.getItem('jobSearch');
   if (searchParams) {
     try {
@@ -39,6 +43,121 @@ async function initJobSearch() {
     } catch (error) {
       console.error('Error loading search params:', error);
     }
+  }
+
+  // Setup auto-save
+  setupAutoSave();
+}
+
+// =============================================================================
+// State Persistence
+// =============================================================================
+
+/**
+ * Save current page state for restoration on navigation
+ */
+async function savePageState() {
+  if (searchResults.length === 0 && !searchTitle.value.trim()) return;
+
+  const pageData = {
+    searchTitle: searchTitle.value,
+    searchLocation: searchLocation.value,
+    searchResults: searchResults,
+    extractUrl: extractUrl.value
+  };
+
+  try {
+    showAutoSaveIndicator('saving');
+
+    await ipcRenderer.invoke('app-state-save-page', {
+      page: 'job-search',
+      data: pageData
+    });
+
+    showAutoSaveIndicator('saved');
+    console.log('[JobSearch] Page state saved');
+  } catch (error) {
+    console.error('[JobSearch] Error saving page state:', error);
+  }
+}
+
+/**
+ * Restore page state from persistent storage
+ */
+async function restorePageState() {
+  try {
+    const result = await ipcRenderer.invoke('app-state-get-page', 'job-search');
+
+    if (result.success && result.pageState && result.pageState.data) {
+      const data = result.pageState.data;
+
+      if (data.searchTitle) {
+        searchTitle.value = data.searchTitle;
+      }
+      if (data.searchLocation) {
+        searchLocation.value = data.searchLocation;
+      }
+      if (data.extractUrl) {
+        extractUrl.value = data.extractUrl;
+      }
+      if (data.searchResults && data.searchResults.length > 0) {
+        searchResults = data.searchResults;
+        renderResults(searchResults);
+      }
+
+      console.log('[JobSearch] Page state restored');
+      return true;
+    }
+  } catch (error) {
+    console.error('[JobSearch] Error restoring page state:', error);
+  }
+  return false;
+}
+
+/**
+ * Setup auto-save functionality
+ */
+function setupAutoSave() {
+  // Auto-save every 30 seconds
+  autoSaveInterval = setInterval(() => {
+    if (searchResults.length > 0 || searchTitle.value.trim()) {
+      savePageState();
+    }
+  }, 30000);
+
+  // Save on visibility change (user switching tabs/windows)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      savePageState();
+    }
+  });
+
+  // Save before unload
+  window.addEventListener('beforeunload', () => {
+    savePageState();
+  });
+}
+
+/**
+ * Show auto-save indicator with status
+ */
+function showAutoSaveIndicator(status) {
+  const indicator = document.getElementById('autoSaveIndicator');
+  if (!indicator) return;
+
+  const icon = indicator.querySelector('.save-icon');
+  const text = indicator.querySelector('.save-text');
+
+  if (status === 'saving') {
+    indicator.classList.add('visible', 'saving');
+    icon.textContent = '↻';
+    text.textContent = 'Saving...';
+  } else {
+    indicator.classList.remove('saving');
+    indicator.classList.add('visible');
+    icon.textContent = '✓';
+    text.textContent = 'Saved';
+    setTimeout(() => { indicator.classList.remove('visible'); }, 2000);
   }
 }
 
@@ -291,6 +410,9 @@ async function addToQueue(job) {
       description: job.description
     });
 
+    // Save state after successful queue add
+    savePageState();
+
     alert(`Added "${job.title}" to queue`);
   } catch (error) {
     console.error('Error adding to queue:', error);
@@ -299,6 +421,9 @@ async function addToQueue(job) {
 }
 
 function optimizeNow(job) {
+  // Save current state before navigating
+  savePageState();
+
   sessionStorage.setItem('quickOptimize', JSON.stringify({
     title: job.title,
     company: job.company,

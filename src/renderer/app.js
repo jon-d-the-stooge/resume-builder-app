@@ -37,6 +37,12 @@ const searchJobsBtn = document.getElementById('searchJobsBtn');
 // Recent Activity Elements
 const recentActivity = document.getElementById('recentActivity');
 
+// Continue Banner Elements
+const continueBanner = document.getElementById('continueBanner');
+const continueText = document.getElementById('continueText');
+const continueBtn = document.getElementById('continueBtn');
+const dismissContinueBtn = document.getElementById('dismissContinueBtn');
+
 // State
 let profileData = null;
 let queueData = [];
@@ -48,6 +54,9 @@ let queueData = [];
 async function initDashboard() {
   // Check API key configuration first
   await checkApiKeyStatus();
+
+  // Check for incomplete workflows
+  await checkContinueWorkflow();
 
   // Load all dashboard data in parallel
   await Promise.all([
@@ -76,6 +85,76 @@ async function checkApiKeyStatus() {
   } catch (error) {
     console.error('Error checking API key status:', error);
   }
+}
+
+// =============================================================================
+// Continue Workflow Banner
+// =============================================================================
+
+async function checkContinueWorkflow() {
+  try {
+    const result = await ipcRenderer.invoke('app-state-get-continue-info');
+
+    if (result.success && result.info && result.info.hasIncompleteWorkflow) {
+      const info = result.info;
+      showContinueBanner(info);
+    }
+  } catch (error) {
+    console.error('Error checking continue workflow:', error);
+  }
+}
+
+function showContinueBanner(info) {
+  const typeLabels = {
+    optimizer: 'Resume Optimization',
+    chat: 'Career Chat',
+    queue: 'Job Queue'
+  };
+
+  const pageUrls = {
+    optimizer: './optimizer.html',
+    chat: './chat.html',
+    queue: './queue.html'
+  };
+
+  const label = typeLabels[info.workflowType] || 'Workflow';
+  const timeAgo = formatTimeAgo(info.updatedAt);
+
+  continueText.innerHTML = `<strong>Continue ${label}</strong> &mdash; You have an incomplete workflow from ${timeAgo}`;
+  continueBanner.style.display = 'flex';
+
+  // Set up continue button
+  continueBtn.onclick = () => {
+    window.location.href = pageUrls[info.workflowType] || './optimizer.html';
+  };
+
+  // Set up dismiss button
+  dismissContinueBtn.onclick = async () => {
+    try {
+      await ipcRenderer.invoke('app-state-clear-workflow');
+      continueBanner.style.display = 'none';
+    } catch (error) {
+      console.error('Error dismissing workflow:', error);
+    }
+  };
+}
+
+function formatTimeAgo(dateStr) {
+  if (!dateStr) return 'earlier';
+
+  const date = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'just now';
+  if (diffMins < 60) return `${diffMins} minute${diffMins > 1 ? 's' : ''} ago`;
+  if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+  if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 // =============================================================================

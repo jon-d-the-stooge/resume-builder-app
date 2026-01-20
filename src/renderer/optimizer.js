@@ -97,7 +97,10 @@ const elements = {
   queueProgressCurrent: document.getElementById('queueProgressCurrent'),
   queueTableBody: document.getElementById('queueTableBody'),
   processAllBtn: document.getElementById('processAllBtn'),
-  clearCompletedBtn: document.getElementById('clearCompletedBtn')
+  clearCompletedBtn: document.getElementById('clearCompletedBtn'),
+
+  // Auto-save indicator
+  autoSaveIndicator: document.getElementById('autoSaveIndicator')
 };
 
 // ============================================================================
@@ -260,6 +263,9 @@ async function handleOptimize() {
     hideError();
     showProgress();
 
+    // Start workflow tracking
+    await startOptimizerWorkflow();
+
     elements.optimizeBtn.disabled = true;
     setButtonLoading(elements.optimizeBtn, 'Optimizing...');
 
@@ -286,6 +292,9 @@ async function handleOptimize() {
     if (result.success) {
       state.results = result.data;
       displayResults(result.data);
+
+      // Auto-save to Applications on successful optimization
+      await saveToApplications(result.data);
     } else {
       showError(result.error || 'Optimization failed');
     }
@@ -439,6 +448,15 @@ function renderQueueTable(jobs) {
     // Actions cell
     const actionsCell = document.createElement('td');
 
+    // "Optimize" button for pending jobs - allows loading into form
+    if (job.status === 'pending') {
+      const optimizeBtn = document.createElement('button');
+      optimizeBtn.className = 'queue-action-btn optimize';
+      optimizeBtn.textContent = 'Optimize';
+      optimizeBtn.onclick = () => loadJobForOptimization(job);
+      actionsCell.appendChild(optimizeBtn);
+    }
+
     if (job.status === 'completed') {
       const viewBtn = document.createElement('button');
       viewBtn.className = 'queue-action-btn view';
@@ -453,6 +471,17 @@ function renderQueueTable(jobs) {
       removeBtn.textContent = 'Remove';
       removeBtn.onclick = () => removeQueueJob(job.id);
       actionsCell.appendChild(removeBtn);
+    }
+
+    // Make pending job rows clickable for quick loading
+    if (job.status === 'pending') {
+      row.style.cursor = 'pointer';
+      row.onclick = (e) => {
+        // Don't trigger if clicking a button
+        if (e.target.tagName !== 'BUTTON') {
+          loadJobForOptimization(job);
+        }
+      };
     }
 
     row.appendChild(jobCell);
@@ -532,17 +561,159 @@ async function handleClearCompleted() {
 
 function viewQueueJobResult(job) {
   if (job && job.result) {
-    const score = Math.round((job.result.finalScore || 0) * 100);
-    const matchedSkills = job.result.matchedSkills?.length || 0;
-    const gaps = job.result.gaps?.length || 0;
-
-    alert(
-      `Job: ${job.title} at ${job.company}\n\n` +
-      `Score: ${score}%\n` +
-      `Matched Skills: ${matchedSkills}\n` +
-      `Gaps: ${gaps}`
-    );
+    // Store job data and reload page with viewResult flag for full display
+    sessionStorage.setItem('viewJobResult', JSON.stringify({
+      id: job.id,
+      title: job.title,
+      company: job.company,
+      description: job.rawDescription || job.description,
+      result: job.result
+    }));
+    // Reload current page with viewResult flag
+    window.location.href = './optimizer.html?viewResult=true';
   }
+}
+
+/**
+ * Display results from a queued job optimization
+ * This transforms queue result format to the optimizer display format
+ */
+function displayQueueJobResults(jobData) {
+  // Set job info in form fields (read-only display)
+  elements.jobTitle.value = jobData.title || 'Job Position';
+  elements.jobCompany.value = jobData.company || '';
+  elements.jobDescription.value = jobData.description || '';
+
+  const result = jobData.result;
+  const score = result.finalScore || 0;
+
+  // Show results section
+  elements.resultsSection.classList.add('visible');
+
+  // Score display - queue jobs may not have initialScore, use 0 as baseline
+  const initialFit = result.previousScore || 0;
+  const finalFit = score;
+  const improvement = finalFit - initialFit;
+
+  elements.scoreBefore.textContent = `${Math.round(initialFit * 100)}%`;
+  elements.scoreAfter.textContent = `${Math.round(finalFit * 100)}%`;
+  elements.scoreImprovement.textContent = improvement >= 0
+    ? `+${Math.round(improvement * 100)}%`
+    : `${Math.round(improvement * 100)}%`;
+
+  elements.scoreBarBefore.style.width = `${initialFit * 100}%`;
+  elements.scoreBarAfter.style.width = `${finalFit * 100}%`;
+
+  // Strengths - using matched skills from queue result
+  clearElement(elements.strengthsList);
+  const matchedSkills = result.matchedSkills || [];
+  if (matchedSkills.length === 0) {
+    const li = document.createElement('li');
+    li.textContent = 'No strengths identified';
+    elements.strengthsList.appendChild(li);
+  } else {
+    matchedSkills.forEach(skill => {
+      const li = document.createElement('li');
+      li.textContent = skill.name || skill;
+      elements.strengthsList.appendChild(li);
+    });
+  }
+
+  // Gaps
+  clearElement(elements.gapsList);
+  const gaps = result.gaps || [];
+  if (gaps.length === 0) {
+    const li = document.createElement('li');
+    li.textContent = 'No gaps identified';
+    elements.gapsList.appendChild(li);
+  } else {
+    gaps.forEach(gap => {
+      const li = document.createElement('li');
+      li.textContent = gap.name || gap;
+      elements.gapsList.appendChild(li);
+    });
+  }
+
+  // Recommendations
+  clearElement(elements.recommendationsList);
+  const recommendations = result.recommendations || [];
+  if (recommendations.length === 0) {
+    const div = document.createElement('div');
+    div.className = 'recommendation-item';
+    div.textContent = 'No recommendations at this time';
+    elements.recommendationsList.appendChild(div);
+  } else {
+    recommendations.forEach(rec => {
+      const div = document.createElement('div');
+      div.className = 'recommendation-item';
+
+      // Handle both string and object recommendations
+      if (typeof rec === 'string') {
+        const textDiv = document.createElement('div');
+        textDiv.className = 'recommendation-text';
+        textDiv.textContent = rec;
+        div.appendChild(textDiv);
+      } else {
+        const prioritySpan = document.createElement('span');
+        prioritySpan.className = `recommendation-priority priority-${rec.priority || 'medium'}`;
+        prioritySpan.textContent = rec.priority || 'medium';
+        div.appendChild(prioritySpan);
+
+        const textDiv = document.createElement('div');
+        textDiv.className = 'recommendation-text';
+        textDiv.textContent = rec.suggestedReframe || rec.suggestion || rec;
+        div.appendChild(textDiv);
+
+        if (rec.rationale) {
+          const rationaleDiv = document.createElement('div');
+          rationaleDiv.className = 'recommendation-rationale';
+          rationaleDiv.textContent = rec.rationale;
+          div.appendChild(rationaleDiv);
+        }
+      }
+
+      elements.recommendationsList.appendChild(div);
+    });
+  }
+
+  // Resume comparison - only show if we have optimized content
+  const optimizedContent = result.optimizedContent;
+  if (optimizedContent) {
+    elements.resumeOriginalSbs.textContent = state.resume.content || 'Original resume not loaded';
+    elements.resumeOptimizedSbs.textContent = optimizedContent;
+    elements.beforeView.textContent = state.resume.content || 'Original resume not loaded';
+    elements.afterView.textContent = optimizedContent;
+  } else {
+    // No optimized content - show placeholder message
+    const placeholder = 'Optimized resume content not available (single-shot analysis mode)';
+    elements.resumeOriginalSbs.textContent = state.resume.content || 'Original resume not loaded';
+    elements.resumeOptimizedSbs.textContent = placeholder;
+    elements.beforeView.textContent = state.resume.content || 'Original resume not loaded';
+    elements.afterView.textContent = placeholder;
+  }
+
+  // Show success message
+  showSuccess(`Viewing results for: ${jobData.title} at ${jobData.company}`);
+}
+
+/**
+ * Load a queued job into the optimizer form for immediate optimization
+ */
+function loadJobForOptimization(job) {
+  // Load job data into form fields
+  elements.jobTitle.value = job.title || '';
+  elements.jobCompany.value = job.company || '';
+  // Queue stores description as 'rawDescription', not 'description'
+  elements.jobDescription.value = job.rawDescription || job.description || '';
+
+  // Scroll to top of page to show the form
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  // Update button state
+  updateOptimizeButtonState();
+
+  // Show success message
+  showSuccess(`Loaded "${job.title}" - ready to optimize`);
 }
 
 // ============================================================================
@@ -845,6 +1016,184 @@ function clearElement(element) {
 }
 
 // ============================================================================
+// State Persistence
+// ============================================================================
+
+let autoSaveInterval = null;
+
+/**
+ * Save current page state for restoration on navigation
+ */
+async function savePageState() {
+  const pageData = {
+    jobTitle: elements.jobTitle.value,
+    jobCompany: elements.jobCompany.value,
+    jobDescription: elements.jobDescription.value,
+    resume: state.resume,
+    hasResults: !!state.results
+  };
+
+  try {
+    // Show saving indicator
+    showAutoSaveIndicator('saving');
+
+    await ipcRenderer.invoke('app-state-save-page', {
+      page: 'optimizer',
+      data: pageData
+    });
+
+    // Also update workflow if active
+    if (state.resume.content || pageData.jobDescription) {
+      await ipcRenderer.invoke('app-state-update-workflow', {
+        currentPage: 'optimizer',
+        data: {
+          jobTitle: pageData.jobTitle || 'Job Position',
+          company: pageData.jobCompany || '',
+          hasResume: !!state.resume.content,
+          hasJobDescription: !!pageData.jobDescription
+        }
+      });
+    }
+
+    // Show saved indicator
+    showAutoSaveIndicator('saved');
+    console.log('[Optimizer] Page state saved');
+  } catch (error) {
+    console.error('[Optimizer] Error saving page state:', error);
+  }
+}
+
+function showAutoSaveIndicator(status) {
+  if (!elements.autoSaveIndicator) return;
+
+  const indicator = elements.autoSaveIndicator;
+  const icon = indicator.querySelector('.save-icon');
+  const text = indicator.querySelector('.save-text');
+
+  if (status === 'saving') {
+    indicator.classList.add('visible', 'saving');
+    icon.textContent = '↻';
+    text.textContent = 'Saving...';
+  } else {
+    indicator.classList.remove('saving');
+    indicator.classList.add('visible');
+    icon.textContent = '✓';
+    text.textContent = 'Saved';
+
+    // Hide after 2 seconds
+    setTimeout(() => {
+      indicator.classList.remove('visible');
+    }, 2000);
+  }
+}
+
+/**
+ * Restore page state from persistent storage
+ */
+async function restorePageState() {
+  try {
+    const result = await ipcRenderer.invoke('app-state-get-page', 'optimizer');
+
+    if (result.success && result.pageState && result.pageState.data) {
+      const data = result.pageState.data;
+
+      // Restore form fields
+      if (data.jobTitle) {
+        elements.jobTitle.value = data.jobTitle;
+      }
+      if (data.jobCompany) {
+        elements.jobCompany.value = data.jobCompany;
+      }
+      if (data.jobDescription) {
+        elements.jobDescription.value = data.jobDescription;
+      }
+
+      // Restore resume state
+      if (data.resume && data.resume.content) {
+        state.resume = data.resume;
+        updateResumePreview();
+      }
+
+      console.log('[Optimizer] Page state restored');
+      return true;
+    }
+  } catch (error) {
+    console.error('[Optimizer] Error restoring page state:', error);
+  }
+  return false;
+}
+
+/**
+ * Start a workflow when user begins optimization
+ */
+async function startOptimizerWorkflow() {
+  try {
+    await ipcRenderer.invoke('app-state-start-workflow', {
+      type: 'optimizer',
+      currentPage: 'optimizer',
+      initialData: {
+        jobTitle: elements.jobTitle.value || 'Job Position',
+        company: elements.jobCompany.value || ''
+      }
+    });
+  } catch (error) {
+    console.error('[Optimizer] Error starting workflow:', error);
+  }
+}
+
+/**
+ * Save completed optimization to Applications
+ */
+async function saveToApplications(results) {
+  try {
+    const saveResult = await ipcRenderer.invoke('applications-save', {
+      jobTitle: elements.jobTitle.value.trim() || 'Job Position',
+      company: elements.jobCompany.value.trim() || 'Unknown Company',
+      jobDescription: elements.jobDescription.value.trim(),
+      generatedResume: results.finalResume?.content || '',
+      score: results.finalFit || 0,
+      metadata: {
+        iterations: results.iterations?.length || 1,
+        initialScore: results.initialFit || 0
+      }
+    });
+
+    if (saveResult.success) {
+      console.log('[Optimizer] Saved to Applications:', saveResult.application.id);
+
+      // Clear the workflow since optimization is complete
+      await ipcRenderer.invoke('app-state-clear-workflow');
+    }
+  } catch (error) {
+    console.error('[Optimizer] Error saving to Applications:', error);
+  }
+}
+
+/**
+ * Setup auto-save functionality
+ */
+function setupAutoSave() {
+  // Auto-save every 30 seconds
+  autoSaveInterval = setInterval(() => {
+    if (state.resume.content || elements.jobDescription.value.trim()) {
+      savePageState();
+    }
+  }, 30000);
+
+  // Save on visibility change (user switching tabs/windows)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      savePageState();
+    }
+  });
+
+  // Save before unload
+  window.addEventListener('beforeunload', () => {
+    savePageState();
+  });
+}
+
+// ============================================================================
 // Initialize
 // ============================================================================
 
@@ -854,27 +1203,85 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Load queue data on page load
   await loadQueueData();
 
-  // Check for quick optimize data from dashboard
-  const quickOptimizeData = sessionStorage.getItem('quickOptimize');
-  if (quickOptimizeData) {
-    try {
-      const data = JSON.parse(quickOptimizeData);
-      sessionStorage.removeItem('quickOptimize');
-
-      // Pre-fill job fields
-      if (data.title) {
-        elements.jobTitle.value = data.title;
+  // Check for viewResult parameter (priority 0 - highest)
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('viewResult') === 'true') {
+    const jobData = sessionStorage.getItem('viewJobResult');
+    if (jobData) {
+      try {
+        const job = JSON.parse(jobData);
+        sessionStorage.removeItem('viewJobResult');
+        // Auto-load resume from vault for comparison
+        await handleLoadFromVault();
+        // Display the queue job results
+        displayQueueJobResults(job);
+        console.log('[Optimizer] Loaded queue job results for:', job.title);
+        return; // Don't load other data sources
+      } catch (error) {
+        console.error('Error loading queue job results:', error);
       }
-      if (data.description) {
-        elements.jobDescription.value = data.description;
+    }
+  }
+
+  // Check for loadApplication data from Applications page (priority 1)
+  const loadApplicationData = sessionStorage.getItem('loadApplication');
+  if (loadApplicationData) {
+    try {
+      const data = JSON.parse(loadApplicationData);
+      sessionStorage.removeItem('loadApplication');
+
+      // Pre-fill job fields from application
+      if (data.jobTitle) {
+        elements.jobTitle.value = data.jobTitle;
+      }
+      if (data.company) {
+        elements.jobCompany.value = data.company;
+      }
+      if (data.jobDescription) {
+        elements.jobDescription.value = data.jobDescription;
       }
 
       // Auto-load resume from vault
       await handleLoadFromVault();
+      console.log('[Optimizer] Loaded application data for re-optimization');
     } catch (error) {
-      console.error('Error loading quick optimize data:', error);
+      console.error('Error loading application data:', error);
     }
   }
+  // Check for quick optimize data from dashboard (priority 2)
+  else {
+    const quickOptimizeData = sessionStorage.getItem('quickOptimize');
+    if (quickOptimizeData) {
+      try {
+        const data = JSON.parse(quickOptimizeData);
+        sessionStorage.removeItem('quickOptimize');
+
+        // Pre-fill job fields
+        if (data.title) {
+          elements.jobTitle.value = data.title;
+        }
+        if (data.description) {
+          elements.jobDescription.value = data.description;
+        }
+
+        // Auto-load resume from vault
+        await handleLoadFromVault();
+      } catch (error) {
+        console.error('Error loading quick optimize data:', error);
+      }
+    }
+    // Try to restore previous page state (priority 3)
+    else {
+      const restored = await restorePageState();
+      if (restored && !state.resume.content) {
+        // If we restored form data but no resume, try loading from vault
+        await handleLoadFromVault();
+      }
+    }
+  }
+
+  // Setup auto-save
+  setupAutoSave();
 
   updateOptimizeButtonState();
 });

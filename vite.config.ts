@@ -18,7 +18,8 @@ export default defineConfig({
         chat: resolve(__dirname, 'src/renderer/chat.html'),
         queue: resolve(__dirname, 'src/renderer/queue.html'),
         jobSearch: resolve(__dirname, 'src/renderer/job-search.html'),
-        vault: resolve(__dirname, 'src/renderer/vault.html')
+        vault: resolve(__dirname, 'src/renderer/vault.html'),
+        applications: resolve(__dirname, 'src/renderer/applications.html')
       }
     }
   },
