@@ -198,6 +198,31 @@
       border-color: #4CAF50;
     }
 
+    .date-range-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .date-range-group label {
+      font-size: 14px;
+      color: #666;
+    }
+
+    .filter-date {
+      padding: 10px 14px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      background: white;
+      cursor: pointer;
+    }
+
+    .filter-date:focus {
+      outline: none;
+      border-color: #4CAF50;
+    }
+
     /* Content Grid */
     .content-grid {
       display: grid;
@@ -987,6 +1012,15 @@
       <select class="filter-select" id="companyFilter">
         <option value="">All Companies</option>
       </select>
+      <select class="filter-select" id="jobTitleFilter">
+        <option value="">All Job Titles</option>
+      </select>
+      <div class="date-range-group">
+        <label>From:</label>
+        <input type="date" class="filter-date" id="dateStartFilter">
+        <label>To:</label>
+        <input type="date" class="filter-date" id="dateEndFilter">
+      </div>
       <select class="filter-select" id="sortSelect">
         <option value="date-desc">Newest First</option>
         <option value="date-asc">Oldest First</option>

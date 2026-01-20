@@ -65,6 +65,9 @@ export interface KnowledgeBaseStats {
 
 export interface KnowledgeBaseFilters {
   company?: string;
+  jobTitle?: string;
+  dateStart?: string;
+  dateEnd?: string;
   text?: string;
   sortBy?: 'date' | 'score' | 'company';
   sortOrder?: 'asc' | 'desc';
@@ -389,6 +392,26 @@ export const knowledgeBaseStore = {
           continue;
         }
 
+        // Apply job title filter
+        if (filters?.jobTitle && entry.jobTitle !== filters.jobTitle) {
+          continue;
+        }
+
+        // Apply date range filter
+        if (filters?.dateStart || filters?.dateEnd) {
+          const entryDate = new Date(entry.createdAt);
+          if (filters.dateStart && entryDate < new Date(filters.dateStart)) {
+            continue;
+          }
+          if (filters.dateEnd) {
+            const endDate = new Date(filters.dateEnd);
+            endDate.setHours(23, 59, 59, 999); // Include entire end day
+            if (entryDate > endDate) {
+              continue;
+            }
+          }
+        }
+
         // Apply text search filter
         if (filters?.text) {
           const searchText = filters.text.toLowerCase();
@@ -633,5 +656,27 @@ export const knowledgeBaseStore = {
     }
 
     return Array.from(companies).sort();
+  },
+
+  /**
+   * Get list of unique job titles for filter dropdown
+   */
+  getJobTitles: (): string[] => {
+    const kbPath = getKnowledgeBasePath();
+    if (!kbPath || !fs.existsSync(kbPath)) {
+      return [];
+    }
+
+    const files = fs.readdirSync(kbPath).filter(f => f.endsWith('.md'));
+    const jobTitles = new Set<string>();
+
+    for (const file of files) {
+      const entry = parseEntry(path.join(kbPath, file));
+      if (entry && entry.jobTitle) {
+        jobTitles.add(entry.jobTitle);
+      }
+    }
+
+    return Array.from(jobTitles).sort();
   }
 };

@@ -17,6 +17,9 @@ const state = {
   filters: {
     text: '',
     company: '',
+    jobTitle: '',
+    dateStart: '',
+    dateEnd: '',
     sortBy: 'date',
     sortOrder: 'desc'
   },
@@ -38,6 +41,9 @@ const elements = {
   // Filters
   searchInput: document.getElementById('searchInput'),
   companyFilter: document.getElementById('companyFilter'),
+  jobTitleFilter: document.getElementById('jobTitleFilter'),
+  dateStartFilter: document.getElementById('dateStartFilter'),
+  dateEndFilter: document.getElementById('dateEndFilter'),
   sortSelect: document.getElementById('sortSelect'),
 
   // Content
@@ -90,6 +96,7 @@ const elements = {
 async function initialize() {
   await loadStats();
   await loadCompanies();
+  await loadJobTitles();
   await loadEntries();
   setupEventListeners();
 }
@@ -122,6 +129,23 @@ async function loadCompanies() {
     }
   } catch (error) {
     console.error('[KnowledgeBase] Error loading companies:', error);
+  }
+}
+
+async function loadJobTitles() {
+  try {
+    const result = await ipcRenderer.invoke('knowledge-base-job-titles');
+    if (result.success) {
+      elements.jobTitleFilter.innerHTML = '<option value="">All Job Titles</option>';
+      for (const title of result.jobTitles) {
+        const option = document.createElement('option');
+        option.value = title;
+        option.textContent = title;
+        elements.jobTitleFilter.appendChild(option);
+      }
+    }
+  } catch (error) {
+    console.error('[KnowledgeBase] Error loading job titles:', error);
   }
 }
 
@@ -559,6 +583,23 @@ function setupEventListeners() {
   // Company filter
   elements.companyFilter.addEventListener('change', () => {
     state.filters.company = elements.companyFilter.value;
+    loadEntries();
+  });
+
+  // Job title filter
+  elements.jobTitleFilter.addEventListener('change', () => {
+    state.filters.jobTitle = elements.jobTitleFilter.value;
+    loadEntries();
+  });
+
+  // Date range filters
+  elements.dateStartFilter.addEventListener('change', () => {
+    state.filters.dateStart = elements.dateStartFilter.value;
+    loadEntries();
+  });
+
+  elements.dateEndFilter.addEventListener('change', () => {
+    state.filters.dateEnd = elements.dateEndFilter.value;
     loadEntries();
   });
 

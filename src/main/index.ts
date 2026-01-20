@@ -2088,6 +2088,16 @@ ipcMain.handle('knowledge-base-companies', async () => {
   }
 });
 
+ipcMain.handle('knowledge-base-job-titles', async () => {
+  try {
+    const jobTitles = knowledgeBaseStore.getJobTitles();
+    return { success: true, jobTitles };
+  } catch (error) {
+    console.error('Get knowledge base job titles error:', error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
 ipcMain.handle('knowledge-base-export', async (event, { id, format }: { id: string; format: 'pdf' | 'docx' | 'md' }) => {
   try {
     const entry = knowledgeBaseStore.get(id);
