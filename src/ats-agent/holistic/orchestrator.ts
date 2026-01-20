@@ -76,13 +76,6 @@ export async function optimizeResume(
       analysis
     };
 
-    // Check if target reached
-    if (analysis.overallFit >= cfg.targetFit) {
-      console.log(`[DONE] Target fit of ${cfg.targetFit} reached!`);
-      iterations.push(iteration);
-      return buildResult(resume, currentResume, iterations, 'target_reached');
-    }
-
     // Check for improvement stagnation (after first round)
     if (round > 1) {
       const improvement = analysis.overallFit - previousFit;
@@ -95,8 +88,8 @@ export async function optimizeResume(
       }
     }
 
-    // Step 2: Rewrite resume (unless this is the last allowed iteration)
-    if (round < cfg.maxIterations) {
+    // Step 2: Rewrite resume when we have recommendations (including final iteration)
+    if (analysis.recommendations.length > 0) {
       console.log('[REWRITE] Applying recommendations...');
       const rewrite = await rewriteResume(currentResume, analysis, llmClient);
 

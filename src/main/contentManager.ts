@@ -87,6 +87,15 @@ export class ContentManagerImpl implements ContentManager {
   }
 
   /**
+   * Gets a content item by its ID
+   * @param id - The ID of the content item to retrieve
+   * @returns Promise resolving to the content item, or null if not found
+   */
+  async getContentItemById(id: string): Promise<ContentItem | null> {
+    return this.contentItems.get(id) || null;
+  }
+
+  /**
    * Updates an existing content item
    * @param id - The ID of the content item to update
    * @param updates - Partial updates to apply
@@ -432,11 +441,12 @@ export class ContentManagerImpl implements ContentManager {
    */
   private reconstructContentItem(result: NoteSearchResult): ContentItem {
     const id = this.extractIdFromPath(result.path);
-    
+    const contentType = result.frontmatter.type;
+
     return {
       id,
-      type: result.frontmatter.type,
-      content: this.extractContentFromMarkdown(result.content),
+      type: contentType,
+      content: this.extractContentFromMarkdown(result.content, contentType),
       tags: result.frontmatter.tags, // Preserve all tags
       metadata: result.frontmatter.metadata, // Preserve all metadata
       parentId: result.frontmatter.parentId, // Preserve hierarchical context
@@ -590,19 +600,33 @@ export class ContentManagerImpl implements ContentManager {
   }
 
   /**
-   * Extracts content from markdown (removes frontmatter and formatting)
+   * Extracts content from markdown based on content type
+   * Different types store their "content" in different places in the markdown:
+   * - SKILL, JOB_ENTRY, EDUCATION, CERTIFICATION: Content is in the H1 title
+   * - ACCOMPLISHMENT: Content is in the body (after H1, before ## sections)
    * @param markdown - Full markdown content
-   * @returns Extracted content
+   * @param contentType - The type of content item
+   * @returns Extracted content without Obsidian navigation sections
    */
-  private extractContentFromMarkdown(markdown: string): string {
+  private extractContentFromMarkdown(markdown: string, contentType?: ContentType): string {
     // Remove frontmatter
-    const withoutFrontmatter = markdown.replace(/^---\n[\s\S]*?\n---\n\n/, '');
-    
-    // Remove markdown headers
-    const withoutHeaders = withoutFrontmatter.replace(/^#+ /gm, '');
-    
-    // Return cleaned content
-    return withoutHeaders.trim();
+    const withoutFrontmatter = markdown.replace(/^---\n[\s\S]*?\n---\n\n?/, '');
+
+    // Stop at first ## section (these contain wikilinks for vault navigation)
+    const contentOnly = withoutFrontmatter.split(/\n## /)[0];
+
+    // For types where content = H1 title (skill name, job title, etc.)
+    const titleTypes = [ContentType.SKILL, ContentType.JOB_ENTRY, ContentType.EDUCATION, ContentType.CERTIFICATION];
+    if (contentType && titleTypes.includes(contentType)) {
+      // Extract just the H1 title
+      const titleMatch = contentOnly.match(/^# (.+)/);
+      return titleMatch ? titleMatch[1].trim() : contentOnly.trim();
+    }
+
+    // For ACCOMPLISHMENT and other types: content is in the body
+    // Remove the H1 title header and return the body content
+    const withoutH1 = contentOnly.replace(/^# .+\n\n?/, '');
+    return withoutH1.trim();
   }
 }
 

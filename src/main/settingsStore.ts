@@ -20,6 +20,8 @@ export interface Settings {
   adzunaAppId?: string;
   adzunaApiKey?: string;
   jsearchApiKey?: string; // RapidAPI JSearch - aggregates LinkedIn, Indeed, etc.
+  // Optimizer Settings
+  maxIterations?: number; // Max optimization iterations (default 3)
 }
 
 // Define the store interface for TypeScript
@@ -42,7 +44,8 @@ const store: StoreInstance = new Store({
     defaultModel: undefined,
     adzunaAppId: '',
     adzunaApiKey: '',
-    jsearchApiKey: ''
+    jsearchApiKey: '',
+    maxIterations: 3
   }
 });
 
@@ -108,6 +111,14 @@ export const settingsStore = {
   },
 
   /**
+   * Get max optimization iterations (default 3)
+   */
+  getMaxIterations: (): number => {
+    const value = store.get('maxIterations');
+    return typeof value === 'number' && value >= 1 && value <= 10 ? value : 3;
+  },
+
+  /**
    * Update settings (partial update)
    */
   set: (settings: Partial<Settings>): void => {
@@ -152,7 +163,9 @@ export const settingsStore = {
       jsearchApiKey: settings.jsearchApiKey
         ? '••••' + settings.jsearchApiKey.slice(-4)
         : '',
-      hasJSearchKey: !!settings.jsearchApiKey && settings.jsearchApiKey.length > 10
+      hasJSearchKey: !!settings.jsearchApiKey && settings.jsearchApiKey.length > 10,
+      // Optimizer settings
+      maxIterations: settings.maxIterations ?? 3
     };
   },
 

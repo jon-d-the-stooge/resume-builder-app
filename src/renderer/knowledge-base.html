@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Knowledge Base - Resume Optimizer</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f5f5f5;
+      min-height: 100vh;
+    }
+
+    /* Navigation Header */
+    .nav-header {
+      background: white;
+      border-bottom: 1px solid #e0e0e0;
+      padding: 0 30px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .nav-container {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 60px;
+    }
+
+    .nav-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 18px;
+      font-weight: 600;
+      color: #333;
+      text-decoration: none;
+    }
+
+    .nav-brand-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #4CAF50, #2e7d32);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 18px;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 8px;
+    }
+
+    .nav-link {
+      padding: 8px 16px;
+      border-radius: 6px;
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      color: #666;
+      transition: all 0.2s;
+    }
+
+    .nav-link:hover {
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    .nav-link.active {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .nav-settings {
+      padding: 8px;
+      border-radius: 6px;
+      text-decoration: none;
+      color: #666;
+      font-size: 18px;
+      transition: all 0.2s;
+    }
+
+    .nav-settings:hover {
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    /* Main Content */
+    .main-content {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 30px;
+    }
+
+    /* Page Header */
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+
+    .page-title {
+      font-size: 28px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .page-subtitle {
+      color: #666;
+      font-size: 14px;
+      margin-top: 4px;
+    }
+
+    /* Stats Bar */
+    .stats-bar {
+      display: flex;
+      gap: 24px;
+      margin-bottom: 24px;
+      padding: 16px 24px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .stat-label {
+      font-size: 13px;
+      color: #666;
+    }
+
+    .stat-value.score {
+      color: #4CAF50;
+    }
+
+    /* Filter Bar */
+    .filter-bar {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      padding: 16px 24px;
+      margin-bottom: 24px;
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .search-input {
+      flex: 1;
+      min-width: 200px;
+      padding: 10px 14px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: #4CAF50;
+    }
+
+    .filter-select {
+      padding: 10px 14px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      background: white;
+      cursor: pointer;
+      min-width: 150px;
+    }
+
+    .filter-select:focus {
+      outline: none;
+      border-color: #4CAF50;
+    }
+
+    /* Content Grid */
+    .content-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 20px;
+    }
+
+    /* Entry Card */
+    .entry-card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      overflow: hidden;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+
+    .entry-card:hover {
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      transform: translateY(-2px);
+    }
+
+    .card-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 4px;
+    }
+
+    .card-company {
+      font-size: 14px;
+      color: #666;
+    }
+
+    .card-body {
+      padding: 16px 20px;
+    }
+
+    .score-bar-container {
+      margin-bottom: 12px;
+    }
+
+    .score-bar-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    .score-bar-label span:first-child {
+      color: #666;
+    }
+
+    .score-bar-label span:last-child {
+      font-weight: 600;
+      color: #333;
+    }
+
+    .score-bar {
+      height: 8px;
+      background: #e0e0e0;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .score-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.3s;
+    }
+
+    .score-bar-fill.high {
+      background: linear-gradient(90deg, #4CAF50, #2e7d32);
+    }
+
+    .score-bar-fill.medium {
+      background: linear-gradient(90deg, #FF9800, #ef6c00);
+    }
+
+    .score-bar-fill.low {
+      background: linear-gradient(90deg, #f44336, #c62828);
+    }
+
+    .card-date {
+      font-size: 12px;
+      color: #888;
+    }
+
+    .card-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 12px;
+    }
+
+    .card-tag {
+      padding: 4px 8px;
+      background: #f0f0f0;
+      border-radius: 12px;
+      font-size: 11px;
+      color: #666;
+    }
+
+    /* Empty State */
+    .empty-state {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 80px 20px;
+      color: #888;
+    }
+
+    .empty-state-icon {
+      font-size: 64px;
+      margin-bottom: 16px;
+      opacity: 0.5;
+    }
+
+    .empty-state-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .empty-state-text {
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+
+    /* Modal Overlay */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .modal-overlay.visible {
+      display: flex;
+    }
+
+    /* Detail Modal */
+    .detail-modal {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+      width: 100%;
+      max-width: 900px;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid #e0e0e0;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .modal-title {
+      font-size: 20px;
+      font-weight: 600;
+      color: #333;
+    }
+
+    .modal-subtitle {
+      font-size: 14px;
+      color: #666;
+      margin-top: 4px;
+    }
+
+    .modal-header-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 24px;
+      cursor: pointer;
+      color: #666;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+
+    .modal-close:hover {
+      background: #f0f0f0;
+      color: #333;
+    }
+
+    /* Tabs */
+    .modal-tabs {
+      display: flex;
+      border-bottom: 1px solid #e0e0e0;
+      padding: 0 24px;
+      background: #fafafa;
+    }
+
+    .modal-tab {
+      padding: 12px 20px;
+      border: none;
+      background: none;
+      font-size: 14px;
+      font-weight: 500;
+      color: #666;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: all 0.2s;
+    }
+
+    .modal-tab:hover {
+      color: #333;
+    }
+
+    .modal-tab.active {
+      color: #4CAF50;
+      border-bottom-color: #4CAF50;
+      background: white;
+    }
+
+    /* Modal Body */
+    .modal-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    /* View Toggle */
+    .view-toggle {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .view-toggle-btn {
+      padding: 8px 16px;
+      border: 1px solid #ddd;
+      background: white;
+      border-radius: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .view-toggle-btn:hover {
+      border-color: #4CAF50;
+    }
+
+    .view-toggle-btn.active {
+      background: #e8f5e9;
+      border-color: #4CAF50;
+      color: #2e7d32;
+    }
+
+    /* Resume Content */
+    .resume-content {
+      background: #fafafa;
+      border: 1px solid #e0e0e0;
+      border-radius: 8px;
+      padding: 20px;
+      min-height: 300px;
+    }
+
+    .resume-content.raw {
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      font-size: 13px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .resume-content.rendered {
+      line-height: 1.6;
+    }
+
+    .resume-content.rendered h1 {
+      font-size: 24px;
+      margin-bottom: 16px;
+      color: #333;
+    }
+
+    .resume-content.rendered h2 {
+      font-size: 18px;
+      margin-top: 24px;
+      margin-bottom: 12px;
+      color: #333;
+    }
+
+    .resume-content.rendered h3 {
+      font-size: 15px;
+      margin-top: 16px;
+      margin-bottom: 8px;
+      color: #333;
+    }
+
+    .resume-content.rendered p {
+      margin-bottom: 12px;
+    }
+
+    .resume-content.rendered ul, .resume-content.rendered ol {
+      margin-left: 24px;
+      margin-bottom: 12px;
+    }
+
+    .resume-content.rendered li {
+      margin-bottom: 6px;
+    }
+
+    .resume-content.edit-mode {
+      border: none;
+      padding: 0;
+    }
+
+    .resume-textarea {
+      width: 100%;
+      min-height: 400px;
+      padding: 16px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      resize: vertical;
+    }
+
+    .resume-textarea:focus {
+      outline: none;
+      border-color: #4CAF50;
+    }
+
+    /* Analysis Section */
+    .analysis-section {
+      margin-bottom: 24px;
+    }
+
+    .analysis-section-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .analysis-score {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 16px;
+      background: #f5f5f5;
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+
+    .score-circle {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      font-weight: 700;
+      color: white;
+    }
+
+    .score-circle.high {
+      background: linear-gradient(135deg, #4CAF50, #2e7d32);
+    }
+
+    .score-circle.medium {
+      background: linear-gradient(135deg, #FF9800, #ef6c00);
+    }
+
+    .score-circle.low {
+      background: linear-gradient(135deg, #f44336, #c62828);
+    }
+
+    .score-details {
+      flex: 1;
+    }
+
+    .score-improvement {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 4px;
+    }
+
+    .score-improvement strong {
+      color: #4CAF50;
+    }
+
+    .analysis-list {
+      list-style: none;
+      padding: 0;
+    }
+
+    .analysis-list li {
+      padding: 10px 12px;
+      background: #fafafa;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      font-size: 14px;
+      color: #333;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+    }
+
+    .analysis-list li::before {
+      content: '';
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-top: 6px;
+      flex-shrink: 0;
+    }
+
+    .analysis-list.strengths li::before {
+      background: #4CAF50;
+    }
+
+    .analysis-list.gaps li::before {
+      background: #FF9800;
+    }
+
+    .recommendation-item {
+      padding: 12px 16px;
+      background: #fafafa;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      border-left: 3px solid;
+    }
+
+    .recommendation-item.high {
+      border-left-color: #f44336;
+    }
+
+    .recommendation-item.medium {
+      border-left-color: #FF9800;
+    }
+
+    .recommendation-item.low {
+      border-left-color: #4CAF50;
+    }
+
+    .recommendation-priority {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .recommendation-item.high .recommendation-priority {
+      color: #f44336;
+    }
+
+    .recommendation-item.medium .recommendation-priority {
+      color: #FF9800;
+    }
+
+    .recommendation-item.low .recommendation-priority {
+      color: #4CAF50;
+    }
+
+    .recommendation-text {
+      font-size: 14px;
+      color: #333;
+      margin-bottom: 4px;
+    }
+
+    .recommendation-rationale {
+      font-size: 13px;
+      color: #666;
+      font-style: italic;
+    }
+
+    /* Job Description Content */
+    .job-description-content {
+      background: #fafafa;
+      border-radius: 8px;
+      padding: 20px;
+      font-size: 14px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+    }
+
+    /* Notes and Tags */
+    .notes-section {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 1px solid #e0e0e0;
+    }
+
+    .notes-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      margin-bottom: 8px;
+    }
+
+    .notes-textarea {
+      width: 100%;
+      min-height: 100px;
+      padding: 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      resize: vertical;
+    }
+
+    .notes-textarea:focus {
+      outline: none;
+      border-color: #4CAF50;
+    }
+
+    .tags-section {
+      margin-top: 16px;
+    }
+
+    .tags-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .tag {
+      padding: 6px 12px;
+      background: #e8f5e9;
+      color: #2e7d32;
+      border-radius: 16px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .tag-remove {
+      background: none;
+      border: none;
+      color: #2e7d32;
+      cursor: pointer;
+      font-size: 16px;
+      padding: 0;
+      line-height: 1;
+    }
+
+    .tag-remove:hover {
+      color: #1b5e20;
+    }
+
+    .add-tag-input {
+      padding: 6px 12px;
+      border: 1px dashed #ccc;
+      border-radius: 16px;
+      font-size: 13px;
+      width: 120px;
+    }
+
+    .add-tag-input:focus {
+      outline: none;
+      border-color: #4CAF50;
+      border-style: solid;
+    }
+
+    /* Modal Footer */
+    .modal-footer {
+      padding: 16px 24px;
+      border-top: 1px solid #e0e0e0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-primary {
+      background: #4CAF50;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #43a047;
+    }
+
+    .btn-secondary {
+      background: white;
+      color: #666;
+      border: 1px solid #ddd;
+    }
+
+    .btn-secondary:hover {
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    .btn-danger {
+      background: #ffebee;
+      color: #c62828;
+      border: 1px solid #ef9a9a;
+    }
+
+    .btn-danger:hover {
+      background: #ffcdd2;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 8px;
+    }
+
+    /* Export Dropdown */
+    .export-dropdown {
+      position: relative;
+    }
+
+    .export-menu {
+      display: none;
+      position: absolute;
+      top: 100%;
+      right: 0;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      min-width: 150px;
+      z-index: 10;
+    }
+
+    .export-dropdown.open .export-menu {
+      display: block;
+    }
+
+    .export-menu-item {
+      display: block;
+      width: 100%;
+      padding: 10px 16px;
+      text-align: left;
+      border: none;
+      background: none;
+      font-size: 14px;
+      cursor: pointer;
+      color: #333;
+    }
+
+    .export-menu-item:hover {
+      background: #f5f5f5;
+    }
+
+    .export-menu-item:first-child {
+      border-radius: 6px 6px 0 0;
+    }
+
+    .export-menu-item:last-child {
+      border-radius: 0 0 6px 6px;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .nav-links {
+        display: none;
+      }
+
+      .page-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 16px;
+      }
+
+      .stats-bar {
+        flex-wrap: wrap;
+      }
+
+      .filter-bar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .content-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .detail-modal {
+        max-height: 100vh;
+        border-radius: 0;
+      }
+
+      .modal-header-actions {
+        flex-wrap: wrap;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation Header -->
+  <nav class="nav-header">
+    <div class="nav-container">
+      <a href="./index.html" class="nav-brand">
+        <div class="nav-brand-icon">R</div>
+        Resume Optimizer
+      </a>
+      <div class="nav-links">
+        <a href="./index.html" class="nav-link">Dashboard</a>
+        <a href="./optimizer.html" class="nav-link">Optimizer</a>
+        <a href="./queue.html" class="nav-link">Queue</a>
+        <a href="./chat.html" class="nav-link">Chat</a>
+        <a href="./job-search.html" class="nav-link">Job Search</a>
+        <a href="./vault.html" class="nav-link">Vault</a>
+        <a href="./knowledge-base.html" class="nav-link active">Knowledge Base</a>
+      </div>
+      <a href="./settings.html" class="nav-settings" title="Settings">&#9881;</a>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Page Header -->
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Knowledge Base</h1>
+        <p class="page-subtitle">Your optimized resumes and job analysis history</p>
+      </div>
+    </div>
+
+    <!-- Stats Bar -->
+    <div class="stats-bar" id="statsBar">
+      <div class="stat-item">
+        <span class="stat-value" id="totalEntries">0</span>
+        <span class="stat-label">Total</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value score" id="avgScore">0%</span>
+        <span class="stat-label">Avg Score</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value" id="thisWeek">0</span>
+        <span class="stat-label">This Week</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value" id="uniqueCompanies">0</span>
+        <span class="stat-label">Companies</span>
+      </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+      <input type="text" class="search-input" id="searchInput" placeholder="Search by job title, company, or tags...">
+      <select class="filter-select" id="companyFilter">
+        <option value="">All Companies</option>
+      </select>
+      <select class="filter-select" id="sortSelect">
+        <option value="date-desc">Newest First</option>
+        <option value="date-asc">Oldest First</option>
+        <option value="score-desc">Highest Score</option>
+        <option value="score-asc">Lowest Score</option>
+        <option value="company-asc">Company A-Z</option>
+        <option value="company-desc">Company Z-A</option>
+      </select>
+    </div>
+
+    <!-- Content Grid -->
+    <div class="content-grid" id="contentGrid">
+      <div class="empty-state" id="emptyState">
+        <div class="empty-state-icon">&#128218;</div>
+        <div class="empty-state-title">No optimizations yet</div>
+        <div class="empty-state-text">Complete your first resume optimization to start building your knowledge base</div>
+        <a href="./optimizer.html" class="btn btn-primary">Go to Optimizer</a>
+      </div>
+    </div>
+  </main>
+
+  <!-- Detail Modal -->
+  <div class="modal-overlay" id="detailModal">
+    <div class="detail-modal">
+      <div class="modal-header">
+        <div>
+          <h2 class="modal-title" id="modalTitle">Job Title @ Company</h2>
+          <p class="modal-subtitle" id="modalSubtitle">Date</p>
+        </div>
+        <div class="modal-header-actions">
+          <div class="export-dropdown" id="exportDropdown">
+            <button class="btn btn-secondary" id="exportBtn">Export &#9660;</button>
+            <div class="export-menu">
+              <button class="export-menu-item" data-format="pdf">Export as PDF</button>
+              <button class="export-menu-item" data-format="docx">Export as Word</button>
+              <button class="export-menu-item" data-format="md">Export as Markdown</button>
+            </div>
+          </div>
+          <button class="modal-close" id="modalClose">&times;</button>
+        </div>
+      </div>
+
+      <div class="modal-tabs">
+        <button class="modal-tab active" data-tab="resume">Resume</button>
+        <button class="modal-tab" data-tab="analysis">Analysis</button>
+        <button class="modal-tab" data-tab="job">Job Description</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Resume Tab -->
+        <div class="tab-content active" id="tab-resume">
+          <div class="view-toggle">
+            <button class="view-toggle-btn active" data-view="rendered">Rendered</button>
+            <button class="view-toggle-btn" data-view="raw">Raw Markdown</button>
+            <button class="view-toggle-btn" data-view="edit">Edit</button>
+          </div>
+          <div class="resume-content rendered" id="resumeContent"></div>
+        </div>
+
+        <!-- Analysis Tab -->
+        <div class="tab-content" id="tab-analysis">
+          <div class="analysis-score" id="analysisScore">
+            <div class="score-circle high" id="scoreCircle">87%</div>
+            <div class="score-details">
+              <div class="score-improvement">Improved from <strong id="initialScore">62%</strong> to <strong id="finalScore">87%</strong></div>
+              <div class="score-improvement">After <strong id="iterationCount">3</strong> optimization iterations</div>
+            </div>
+          </div>
+
+          <div class="analysis-section">
+            <div class="analysis-section-title">&#9989; Strengths</div>
+            <ul class="analysis-list strengths" id="strengthsList"></ul>
+          </div>
+
+          <div class="analysis-section">
+            <div class="analysis-section-title">&#9888; Gaps to Address</div>
+            <ul class="analysis-list gaps" id="gapsList"></ul>
+          </div>
+
+          <div class="analysis-section">
+            <div class="analysis-section-title">&#128161; Recommendations</div>
+            <div id="recommendationsList"></div>
+          </div>
+        </div>
+
+        <!-- Job Description Tab -->
+        <div class="tab-content" id="tab-job">
+          <div class="job-description-content" id="jobDescription"></div>
+        </div>
+
+        <!-- Notes and Tags (always visible) -->
+        <div class="notes-section">
+          <div class="notes-label">Notes</div>
+          <textarea class="notes-textarea" id="notesTextarea" placeholder="Add notes about this optimization..."></textarea>
+
+          <div class="tags-section">
+            <div class="notes-label">Tags</div>
+            <div class="tags-container" id="tagsContainer">
+              <input type="text" class="add-tag-input" id="addTagInput" placeholder="Add tag...">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-danger" id="deleteBtn">Delete Entry</button>
+        <div class="btn-group">
+          <button class="btn btn-secondary" id="cancelBtn">Close</button>
+          <button class="btn btn-primary" id="saveBtn">Save Changes</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="./knowledge-base.js"></script>
+</body>
+</html>

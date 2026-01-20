@@ -19,7 +19,8 @@ export default defineConfig({
         queue: resolve(__dirname, 'src/renderer/queue.html'),
         jobSearch: resolve(__dirname, 'src/renderer/job-search.html'),
         vault: resolve(__dirname, 'src/renderer/vault.html'),
-        applications: resolve(__dirname, 'src/renderer/applications.html')
+        applications: resolve(__dirname, 'src/renderer/applications.html'),
+        knowledgeBase: resolve(__dirname, 'src/renderer/knowledge-base.html')
       }
     }
   },

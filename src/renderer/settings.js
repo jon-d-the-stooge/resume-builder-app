@@ -35,6 +35,9 @@ const adzunaApiKeyInput = document.getElementById('adzunaApiKey');
 const adzunaStatus = document.getElementById('adzunaStatus');
 const toggleAdzuna = document.getElementById('toggleAdzuna');
 
+// Optimizer settings elements
+const maxIterationsSelect = document.getElementById('maxIterations');
+
 // Track original values to detect changes
 let originalSettings = null;
 
@@ -160,6 +163,11 @@ async function loadSettings() {
     }
     updateStatusIndicator(adzunaStatus, settings.hasAdzunaKey);
 
+    // Load optimizer settings
+    if (settings.maxIterations) {
+      maxIterationsSelect.value = String(settings.maxIterations);
+    }
+
   } catch (error) {
     console.error('Failed to load settings:', error);
     showMessage('Failed to load settings: ' + error.message, 'error');
@@ -204,6 +212,12 @@ async function saveSettings(event) {
     const adzunaKey = adzunaApiKeyInput.value.trim();
     if (adzunaKey && !adzunaKey.startsWith('••••')) {
       newSettings.adzunaApiKey = adzunaKey;
+    }
+
+    // Optimizer settings
+    const maxIterations = parseInt(maxIterationsSelect.value, 10);
+    if (maxIterations >= 1 && maxIterations <= 10) {
+      newSettings.maxIterations = maxIterations;
     }
 
     const result = await ipcRenderer.invoke('save-settings', newSettings);

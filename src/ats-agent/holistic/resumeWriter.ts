@@ -38,10 +38,19 @@ export async function rewriteResume(
 
   const result = llmClient.parseJsonResponse(response.content);
 
+  // Validate that we got actual rewritten content
+  if (!result.rewrittenContent || result.rewrittenContent.trim().length === 0) {
+    console.error('[REWRITE] ERROR: LLM did not return rewrittenContent');
+    console.error('[REWRITE] Raw response:', response.content.substring(0, 500));
+    throw new Error('Resume rewriting failed: LLM did not return rewritten content');
+  }
+
+  console.log(`[REWRITE] Received ${result.rewrittenContent.length} chars of rewritten content`);
+
   return {
     rewrittenResume: {
       id: `${originalResume.id}-v2`,
-      content: result.rewrittenContent || originalResume.content,
+      content: result.rewrittenContent,  // No fallback - error if missing
       format: originalResume.format,
       metadata: {
         ...originalResume.metadata,

@@ -295,6 +295,9 @@ async function handleOptimize() {
 
       // Auto-save to Applications on successful optimization
       await saveToApplications(result.data);
+
+      // Also save to Knowledge Base for browsing/searching later
+      await saveToKnowledgeBase(result.data);
     } else {
       showError(result.error || 'Optimization failed');
     }
@@ -1166,6 +1169,53 @@ async function saveToApplications(results) {
     }
   } catch (error) {
     console.error('[Optimizer] Error saving to Applications:', error);
+  }
+}
+
+/**
+ * Save completed optimization to Knowledge Base
+ */
+async function saveToKnowledgeBase(results) {
+  try {
+    // Extract analysis data from the last iteration
+    const lastIteration = results.iterations?.slice(-1)[0];
+    const analysis = lastIteration?.analysis || {};
+
+    const entry = {
+      jobTitle: elements.jobTitle.value.trim() || 'Job Position',
+      company: elements.jobCompany.value.trim() || 'Unknown Company',
+      jobDescription: elements.jobDescription.value.trim(),
+      sourceUrl: state.job?.sourceUrl || null,
+      optimizedResume: results.finalResume?.content || '',
+      analysis: {
+        finalScore: results.finalFit || 0,
+        initialScore: results.initialFit || 0,
+        iterations: results.iterations?.length || 1,
+        strengths: analysis.strengths || [],
+        gaps: analysis.gaps || [],
+        recommendations: (analysis.recommendations || []).map(rec => {
+          // Handle both string and object formats
+          if (typeof rec === 'string') {
+            return { priority: 'medium', suggestion: rec };
+          }
+          return {
+            priority: rec.priority || 'medium',
+            suggestion: rec.suggestion || rec.text || String(rec),
+            rationale: rec.rationale || undefined
+          };
+        })
+      }
+    };
+
+    const saveResult = await ipcRenderer.invoke('knowledge-base-save', entry);
+
+    if (saveResult.success) {
+      console.log('[Optimizer] Saved to Knowledge Base:', saveResult.entry.id);
+    } else {
+      console.warn('[Optimizer] Knowledge Base save failed:', saveResult.error);
+    }
+  } catch (error) {
+    console.error('[Optimizer] Error saving to Knowledge Base:', error);
   }
 }
 

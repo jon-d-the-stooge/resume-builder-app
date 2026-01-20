@@ -279,6 +279,7 @@
         <a href="./chat.html" style="padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; color: #666;">Chat</a>
         <a href="./job-search.html" style="padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; color: #666;">Job Search</a>
         <a href="./vault.html" style="padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; color: #666;">Vault</a>
+        <a href="./knowledge-base.html" style="padding: 8px 16px; border-radius: 6px; text-decoration: none; font-size: 14px; font-weight: 500; color: #666;">Knowledge Base</a>
       </div>
       <a href="./settings.html" style="padding: 8px; border-radius: 6px; background: #e8f5e9; text-decoration: none; color: #2e7d32; font-size: 18px;" title="Settings">&#9881;</a>
     </div>
@@ -381,6 +382,28 @@
             <button type="button" class="btn-toggle" id="toggleAdzuna" title="Show/Hide">Show</button>
           </div>
           <p class="form-hint">Get your credentials from <a href="https://developer.adzuna.com/" target="_blank">developer.adzuna.com</a> (free signup)</p>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <h3 class="section-title">Optimizer Settings</h3>
+        <div class="form-group">
+          <label class="form-label">Max Optimization Iterations</label>
+          <div class="input-wrapper" style="max-width: 200px;">
+            <select class="form-input" id="maxIterations" style="font-family: inherit;">
+              <option value="1">1 iteration</option>
+              <option value="2">2 iterations</option>
+              <option value="3" selected>3 iterations (default)</option>
+              <option value="4">4 iterations</option>
+              <option value="5">5 iterations</option>
+              <option value="6">6 iterations</option>
+              <option value="7">7 iterations</option>
+              <option value="8">8 iterations</option>
+              <option value="9">9 iterations</option>
+              <option value="10">10 iterations</option>
+            </select>
+          </div>
+          <p class="form-hint">Higher values may produce better results but take longer. Each iteration analyzes and rewrites the resume. 3 is recommended for most use cases.</p>
         </div>
       </div>
 

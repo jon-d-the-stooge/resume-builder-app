@@ -175,6 +175,7 @@ export interface ContentManager {
   linkSkillToMultipleJobs(skillId: string, jobIds: string[]): Promise<void>;
   searchContentItems(query: SearchQuery): Promise<ContentItem[]>;
   detectDuplicates(item: ContentItemInput): Promise<ContentItem[]>;
+  getContentItemById(id: string): Promise<ContentItem | null>;
 }
 
 /**

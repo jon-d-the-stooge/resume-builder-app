@@ -13,6 +13,7 @@ import { queueProcessor } from './queueProcessor';
 import { settingsStore } from './settingsStore';
 import { appStateStore } from './appStateStore';
 import { applicationsStore, ApplicationStatus } from './applicationsStore';
+import { knowledgeBaseStore, KnowledgeBaseEntry, KnowledgeBaseFilters } from './knowledgeBaseStore';
 import PDFDocument from 'pdfkit';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
 import { chromium, Browser } from 'playwright-core';
@@ -389,9 +390,8 @@ ipcMain.handle('get-content-item', async (event, contentItemId) => {
       throw new Error('Content item ID is required');
     }
 
-    // Search for the specific item
-    const results = await contentManager.searchContentItems({ text: contentItemId });
-    const item = results.find(r => r.id === contentItemId);
+    // Get item directly by ID
+    const item = await contentManager.getContentItemById(contentItemId);
 
     if (!item) {
       throw new Error(`Content item not found: ${contentItemId}`);
@@ -1349,7 +1349,19 @@ ipcMain.handle('optimizer-get-resume-preview', async () => {
         jobContent.push(`Company: ${job.metadata.company}`);
       }
       if (job.metadata?.location) {
-        jobContent.push(`Location: ${job.metadata.location}`);
+        // Format location object properly instead of [object Object]
+        const loc = job.metadata.location;
+        if (typeof loc === 'string') {
+          jobContent.push(`Location: ${loc}`);
+        } else if (typeof loc === 'object' && loc !== null) {
+          const parts: string[] = [];
+          if (loc.city) parts.push(loc.city);
+          if (loc.state) parts.push(loc.state);
+          if (loc.country) parts.push(loc.country);
+          if (parts.length > 0) {
+            jobContent.push(`Location: ${parts.join(', ')}`);
+          }
+        }
       }
       if (job.metadata?.dateRange) {
         const dr = job.metadata.dateRange;
@@ -1377,9 +1389,15 @@ ipcMain.handle('optimizer-get-resume-preview', async () => {
     });
 
     if (skills.length > 0) {
-      contentParts.push('\n## Skills');
-      const skillNames = skills.map(s => s.content);
-      contentParts.push(skillNames.join(', '));
+      // Filter out skills with empty or whitespace-only content
+      const skillNames = skills
+        .map(s => s.content?.trim())
+        .filter(name => name && name.length > 0);
+
+      if (skillNames.length > 0) {
+        contentParts.push('\n## Skills');
+        contentParts.push(skillNames.join(', '));
+      }
     }
 
     // Get education
@@ -1466,18 +1484,19 @@ ipcMain.handle('optimizer-optimize', async (event, { jobPosting, resume }) => {
         percent: 10,
         stage: 'Analyzing job posting and resume...',
         round: 1,
-        totalRounds: 3
+        totalRounds: settingsStore.getMaxIterations()
       });
     }
 
     // Run holistic optimization
+    const maxIterations = settingsStore.getMaxIterations();
     const result = await holisticOptimize(
       jobPosting as JobPosting,
       resume as Resume,
       llmClient,
       {
         targetFit: 0.8,
-        maxIterations: 3,
+        maxIterations,
         minImprovement: 0.05
       }
     );
@@ -1488,7 +1507,7 @@ ipcMain.handle('optimizer-optimize', async (event, { jobPosting, resume }) => {
         percent: 100,
         stage: 'Optimization complete!',
         round: result.iterations.length,
-        totalRounds: 3
+        totalRounds: maxIterations
       });
     }
 
@@ -1972,6 +1991,237 @@ ipcMain.handle('applications-delete', async (event, id: string) => {
     return { success: true };
   } catch (error) {
     console.error('Delete application error:', error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+// ============================================================================
+// Knowledge Base IPC Handlers
+// ============================================================================
+
+ipcMain.handle('knowledge-base-list', async (event, filters?: KnowledgeBaseFilters) => {
+  try {
+    const entries = knowledgeBaseStore.list(filters);
+    return { success: true, entries };
+  } catch (error) {
+    console.error('List knowledge base error:', error);
+    return { success: false, error: (error as Error).message, entries: [] };
+  }
+});
+
+ipcMain.handle('knowledge-base-get', async (event, id: string) => {
+  try {
+    const entry = knowledgeBaseStore.get(id);
+    if (!entry) {
+      return { success: false, error: 'Entry not found' };
+    }
+    return { success: true, entry };
+  } catch (error) {
+    console.error('Get knowledge base entry error:', error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+ipcMain.handle('knowledge-base-save', async (event, data: Omit<KnowledgeBaseEntry, 'id' | 'createdAt'>) => {
+  try {
+    const entry = knowledgeBaseStore.save(data);
+    if (!entry) {
+      return { success: false, error: 'Failed to save entry - vault not configured?' };
+    }
+    return { success: true, entry };
+  } catch (error) {
+    console.error('Save knowledge base entry error:', error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+ipcMain.handle('knowledge-base-update', async (event, { id, updates }: {
+  id: string;
+  updates: {
+    notes?: string;
+    tags?: string[];
+    optimizedResume?: string;
+  };
+}) => {
+  try {
+    const entry = knowledgeBaseStore.update(id, updates);
+    if (!entry) {
+      return { success: false, error: 'Entry not found' };
+    }
+    return { success: true, entry };
+  } catch (error) {
+    console.error('Update knowledge base entry error:', error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+ipcMain.handle('knowledge-base-delete', async (event, id: string) => {
+  try {
+    const deleted = knowledgeBaseStore.delete(id);
+    if (!deleted) {
+      return { success: false, error: 'Entry not found' };
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('Delete knowledge base entry error:', error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+ipcMain.handle('knowledge-base-stats', async () => {
+  try {
+    const stats = knowledgeBaseStore.getStats();
+    return { success: true, stats };
+  } catch (error) {
+    console.error('Get knowledge base stats error:', error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+ipcMain.handle('knowledge-base-companies', async () => {
+  try {
+    const companies = knowledgeBaseStore.getCompanies();
+    return { success: true, companies };
+  } catch (error) {
+    console.error('Get knowledge base companies error:', error);
+    return { success: false, error: (error as Error).message };
+  }
+});
+
+ipcMain.handle('knowledge-base-export', async (event, { id, format }: { id: string; format: 'pdf' | 'docx' | 'md' }) => {
+  try {
+    const entry = knowledgeBaseStore.get(id);
+    if (!entry) {
+      return { success: false, error: 'Entry not found' };
+    }
+
+    const safeTitle = entry.jobTitle.replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, '-');
+    const safeCompany = entry.company.replace(/[^a-zA-Z0-9\s-]/g, '').replace(/\s+/g, '-');
+    const defaultFilename = `${safeCompany}-${safeTitle}-resume`;
+
+    if (format === 'md') {
+      // Export as markdown
+      const result = await dialog.showSaveDialog(mainWindow!, {
+        defaultPath: `${defaultFilename}.md`,
+        filters: [{ name: 'Markdown', extensions: ['md'] }]
+      });
+
+      if (result.canceled || !result.filePath) {
+        return { success: false, canceled: true };
+      }
+
+      fs.writeFileSync(result.filePath, entry.optimizedResume, 'utf-8');
+      return { success: true, path: result.filePath };
+    }
+
+    if (format === 'pdf') {
+      // Export as PDF (reuse existing PDF logic)
+      const result = await dialog.showSaveDialog(mainWindow!, {
+        defaultPath: `${defaultFilename}.pdf`,
+        filters: [{ name: 'PDF', extensions: ['pdf'] }]
+      });
+
+      if (result.canceled || !result.filePath) {
+        return { success: false, canceled: true };
+      }
+
+      const doc = new PDFDocument({ margin: 50, size: 'LETTER' });
+      const writeStream = fs.createWriteStream(result.filePath);
+      doc.pipe(writeStream);
+
+      const lines = entry.optimizedResume.split('\n');
+      for (const line of lines) {
+        if (line.startsWith('# ')) {
+          doc.fontSize(24).font('Helvetica-Bold').text(line.substring(2));
+          doc.moveDown(0.5);
+        } else if (line.startsWith('## ')) {
+          doc.fontSize(18).font('Helvetica-Bold').text(line.substring(3));
+          doc.moveDown(0.3);
+        } else if (line.startsWith('### ')) {
+          doc.fontSize(14).font('Helvetica-Bold').text(line.substring(4));
+          doc.moveDown(0.2);
+        } else if (line.startsWith('- ') || line.startsWith('* ')) {
+          doc.fontSize(11).font('Helvetica').text('• ' + line.substring(2), { indent: 20 });
+        } else if (line.startsWith('**') && line.endsWith('**')) {
+          doc.fontSize(11).font('Helvetica-Bold').text(line.slice(2, -2));
+        } else if (line.trim() === '') {
+          doc.moveDown(0.5);
+        } else {
+          doc.fontSize(11).font('Helvetica').text(line);
+        }
+      }
+
+      doc.end();
+      await new Promise<void>((resolve, reject) => {
+        writeStream.on('finish', resolve);
+        writeStream.on('error', reject);
+      });
+
+      return { success: true, path: result.filePath };
+    }
+
+    if (format === 'docx') {
+      // Export as Word document (reuse existing Word logic)
+      const result = await dialog.showSaveDialog(mainWindow!, {
+        defaultPath: `${defaultFilename}.docx`,
+        filters: [{ name: 'Word Document', extensions: ['docx'] }]
+      });
+
+      if (result.canceled || !result.filePath) {
+        return { success: false, canceled: true };
+      }
+
+      const lines = entry.optimizedResume.split('\n');
+      const children: Paragraph[] = [];
+
+      for (const line of lines) {
+        if (line.startsWith('# ')) {
+          children.push(new Paragraph({
+            text: line.substring(2),
+            heading: HeadingLevel.HEADING_1,
+            spacing: { after: 200 }
+          }));
+        } else if (line.startsWith('## ')) {
+          children.push(new Paragraph({
+            text: line.substring(3),
+            heading: HeadingLevel.HEADING_2,
+            spacing: { after: 150 }
+          }));
+        } else if (line.startsWith('### ')) {
+          children.push(new Paragraph({
+            text: line.substring(4),
+            heading: HeadingLevel.HEADING_3,
+            spacing: { after: 100 }
+          }));
+        } else if (line.startsWith('- ') || line.startsWith('* ')) {
+          children.push(new Paragraph({
+            children: [new TextRun({ text: '• ' + line.substring(2) })],
+            indent: { left: 720 }
+          }));
+        } else if (line.startsWith('**') && line.endsWith('**')) {
+          children.push(new Paragraph({
+            children: [new TextRun({ text: line.slice(2, -2), bold: true })]
+          }));
+        } else if (line.trim() === '') {
+          children.push(new Paragraph({ text: '' }));
+        } else {
+          children.push(new Paragraph({ text: line }));
+        }
+      }
+
+      const doc = new Document({
+        sections: [{ children }]
+      });
+
+      const buffer = await Packer.toBuffer(doc);
+      fs.writeFileSync(result.filePath, buffer);
+
+      return { success: true, path: result.filePath };
+    }
+
+    return { success: false, error: 'Unsupported format' };
+  } catch (error) {
+    console.error('Export knowledge base entry error:', error);
     return { success: false, error: (error as Error).message };
   }
 });

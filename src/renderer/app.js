@@ -62,7 +62,8 @@ async function initDashboard() {
   await Promise.all([
     loadProfileStatus(),
     loadQueueStatus(),
-    loadRecentActivity()
+    loadRecentActivity(),
+    loadKnowledgeBaseStats()
   ]);
 }
 
@@ -363,6 +364,28 @@ async function loadRecentActivity() {
     });
   } catch (error) {
     console.error('Error loading recent activity:', error);
+  }
+}
+
+// =============================================================================
+// Knowledge Base Stats
+// =============================================================================
+
+async function loadKnowledgeBaseStats() {
+  try {
+    const result = await ipcRenderer.invoke('knowledge-base-stats');
+
+    if (result.success) {
+      const kbTotal = document.getElementById('kbTotal');
+      const kbAvgScore = document.getElementById('kbAvgScore');
+      const kbThisWeek = document.getElementById('kbThisWeek');
+
+      if (kbTotal) kbTotal.textContent = result.stats.total;
+      if (kbAvgScore) kbAvgScore.textContent = Math.round(result.stats.averageScore * 100) + '%';
+      if (kbThisWeek) kbThisWeek.textContent = result.stats.thisWeek;
+    }
+  } catch (error) {
+    console.error('Error loading knowledge base stats:', error);
   }
 }
 
