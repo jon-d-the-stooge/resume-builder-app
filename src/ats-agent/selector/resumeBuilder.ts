@@ -18,6 +18,7 @@ import type {
   ContentVaultItem
 } from './types';
 import { ContentType } from '../../shared/obsidian/types';
+import { getExperienceMetadata, hasStructuredExperienceMetadata } from './vaultAdapter';
 
 // ============================================================================
 // Resume Building
@@ -172,6 +173,9 @@ function buildExperienceSection(
 
 /**
  * Format a single job entry with its accomplishments
+ *
+ * Uses structured metadata from hierarchical vault when available,
+ * otherwise falls back to extracting from content string.
  */
 function formatJobEntry(
   job: ContentVaultItem,
@@ -179,11 +183,14 @@ function formatJobEntry(
 ): string {
   const lines: string[] = [];
 
-  // Job header
-  const title = extractJobTitle(job);
-  const company = job.metadata.company || '';
-  const location = formatLocation(job.metadata.location);
-  const dateRange = formatDateRange(job.metadata.dateRange);
+  // Get structured metadata (from vault adapter if available)
+  const expMeta = getExperienceMetadata(job);
+  const title = expMeta.title;
+  const company = expMeta.company;
+  const location = expMeta.location || formatLocation(job.metadata.location);
+  const dateRange = expMeta.startDate
+    ? formatDateRangeFromMeta(expMeta.startDate, expMeta.endDate)
+    : formatDateRange(job.metadata.dateRange);
 
   lines.push(`### ${title}${company ? ` | ${company}` : ''}`);
   if (location || dateRange) {
@@ -206,14 +213,36 @@ function formatJobEntry(
       lines.push(`- ${acc.item.content}`);
     }
   } else {
-    // Use the job's own content if no linked accomplishments
-    const jobContent = job.content;
-    if (jobContent && !jobContent.includes(title)) {
-      lines.push(`- ${jobContent}`);
+    // Use job's children if available (from hierarchical vault)
+    if (job.children && job.children.length > 0) {
+      for (const child of job.children) {
+        lines.push(`- ${child.content}`);
+      }
+    } else {
+      // Use the job's own content if no linked accomplishments
+      const jobContent = job.content;
+      if (jobContent && !jobContent.includes(title)) {
+        lines.push(`- ${jobContent}`);
+      }
     }
   }
 
   return lines.join('\n');
+}
+
+/**
+ * Format date range from structured metadata fields
+ */
+function formatDateRangeFromMeta(startDate?: string, endDate?: string): string {
+  if (!startDate) return '';
+
+  const startYear = formatYear(startDate);
+  if (endDate) {
+    const endYear = formatYear(endDate);
+    return `${startYear} - ${endYear}`;
+  }
+
+  return `${startYear} - Present`;
 }
 
 /**
@@ -336,22 +365,6 @@ function buildCertificationsSection(certifications: SelectedItem[]): string {
 // ============================================================================
 // Helper Functions
 // ============================================================================
-
-/**
- * Extract job title from content or metadata
- */
-function extractJobTitle(job: ContentVaultItem): string {
-  // Try to extract from content
-  const content = job.content;
-
-  // If content starts with a typical title pattern, use that
-  const titleMatch = content.match(/^([^-–|•\n]+)/);
-  if (titleMatch) {
-    return titleMatch[1].trim();
-  }
-
-  return content.split('\n')[0].trim();
-}
 
 /**
  * Format location from metadata

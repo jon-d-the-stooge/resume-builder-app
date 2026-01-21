@@ -45,6 +45,21 @@ export interface KnowledgeBaseEntry {
   createdAt: string;           // ISO 8601
   notes?: string;
   tags?: string[];
+
+  // === Enhanced Optimization Output (Option A) ===
+  // All new fields are optional for backward compatibility
+
+  /** Parsed and categorized job requirements */
+  parsedRequirements?: ParsedRequirements;
+
+  /** Decision audit trail: what was included/excluded and why */
+  decisions?: OptimizationDecisions;
+
+  /** Full committee analysis output (advocate/critic dialogue) */
+  committeeOutput?: CommitteeOutput;
+
+  /** Performance metrics for the optimization run */
+  metrics?: OptimizationMetrics;
 }
 
 export interface KnowledgeBaseSummary {
@@ -71,6 +86,109 @@ export interface KnowledgeBaseFilters {
   text?: string;
   sortBy?: 'date' | 'score' | 'company';
   sortOrder?: 'asc' | 'desc';
+}
+
+// ============================================================================
+// Enhanced Optimization Output Types (Option A Implementation)
+// ============================================================================
+
+/**
+ * Parsed job requirements from the selector stage
+ * Provides structured insight into what the job posting requires
+ */
+export interface ParsedRequirements {
+  /** Must-have qualifications */
+  required: string[];
+  /** Nice-to-have qualifications */
+  preferred: string[];
+  /** Technical/hard skills mentioned */
+  skills: string[];
+  /** Experience level requirement (e.g., "5+ years", "Senior level") */
+  experience: string | null;
+  /** Education requirement */
+  education: string | null;
+  /** Key themes/focus areas identified */
+  themes?: string[];
+}
+
+/**
+ * Tracks which vault items were included/excluded and why
+ * Provides decision audit trail for transparency
+ */
+export interface OptimizationDecisions {
+  /** Items included in the final resume with reasons */
+  includedItems: Array<{
+    itemId: string;
+    reason: string;
+    matchedRequirements?: string[];
+  }>;
+  /** Items excluded from the final resume with reasons */
+  excludedItems: Array<{
+    itemId: string;
+    reason: string;
+  }>;
+  /** Items that were modified during optimization */
+  modifiedItems: Array<{
+    originalContent: string;
+    modifiedContent: string;
+    keywordsAdded: string[];
+    rationale: string;
+  }>;
+}
+
+/**
+ * Committee analysis output capturing the advocate/critic dialogue
+ * Preserves the dialectic process for audit and learning
+ */
+export interface CommitteeOutput {
+  /** Advocate's fit score assessment */
+  advocateFitScore: number;
+  /** Critic's fit score assessment */
+  criticFitScore: number;
+  /** Number of dialogue rounds */
+  rounds: number;
+  /** Why optimization stopped */
+  terminationReason: 'consensus' | 'target_reached' | 'max_rounds' | 'no_improvement';
+  /** Connections found between resume and job requirements */
+  connections: Array<{
+    requirement: string;
+    evidence: string;
+    strength: 'strong' | 'moderate' | 'inferred' | 'transferable';
+  }>;
+  /** Validated strengths from the resume */
+  strengths: string[];
+  /** Issues raised by the critic */
+  challenges: Array<{
+    type: 'overclaim' | 'unsupported' | 'missing' | 'weak_evidence' | 'terminology_gap' | 'blandification';
+    claim: string;
+    issue: string;
+    severity: 'critical' | 'major' | 'minor';
+  }>;
+  /** Genuine gaps that couldn't be addressed through reframing */
+  genuineGaps: Array<{
+    requirement: string;
+    reason: string;
+    isRequired: boolean;
+  }>;
+}
+
+/**
+ * Performance metrics for the optimization run
+ */
+export interface OptimizationMetrics {
+  /** Total processing time in milliseconds */
+  durationMs: number;
+  /** Token usage breakdown by agent */
+  tokenUsage?: {
+    advocate: number;
+    critic: number;
+    writer: number;
+    total: number;
+  };
+  /** Number of vault items considered */
+  vaultItemsConsidered?: number;
+  /** Number of items selected for resume */
+  itemsSelected?: number;
 }
 
 // ============================================================================
@@ -174,9 +292,53 @@ function formatRecommendations(recs: KnowledgeBaseRecommendation[]): string {
 }
 
 /**
+ * Format complex object as JSON string for YAML storage
+ * This approach preserves nested structures without complex YAML handling
+ */
+function formatJsonField(obj: any): string {
+  if (!obj) return '';
+  try {
+    return JSON.stringify(obj);
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Parse JSON field from YAML frontmatter
+ */
+function parseJsonField<T>(value: string | undefined): T | undefined {
+  if (!value || value === '') return undefined;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Generate markdown content for a knowledge base entry
  */
 function generateMarkdown(entry: KnowledgeBaseEntry): string {
+  // Build enhanced fields section (only if present)
+  let enhancedFields = '';
+
+  if (entry.parsedRequirements) {
+    enhancedFields += `parsed_requirements: ${formatJsonField(entry.parsedRequirements)}\n`;
+  }
+
+  if (entry.decisions) {
+    enhancedFields += `decisions: ${formatJsonField(entry.decisions)}\n`;
+  }
+
+  if (entry.committeeOutput) {
+    enhancedFields += `committee_output: ${formatJsonField(entry.committeeOutput)}\n`;
+  }
+
+  if (entry.metrics) {
+    enhancedFields += `metrics: ${formatJsonField(entry.metrics)}\n`;
+  }
+
   const frontmatter = `---
 type: knowledge-base-entry
 id: ${entry.id}
@@ -192,7 +354,7 @@ recommendations:${formatRecommendations(entry.analysis.recommendations)}
 created_at: ${entry.createdAt}
 tags:${formatYamlArray(entry.tags || [])}
 notes: ${escapeYaml(entry.notes || '')}
----
+${enhancedFields}---
 
 `;
 
@@ -342,7 +504,8 @@ function parseEntry(filePath: string): KnowledgeBaseEntry | null {
     const resumeMatch = body.match(/# Optimized Resume\n\n([\s\S]*?)(?=\n---\n|\n# Job Description|$)/);
     const jobDescMatch = body.match(/# Job Description\n\n([\s\S]*?)$/);
 
-    return {
+    // Build base entry
+    const entry: KnowledgeBaseEntry = {
       id: frontmatter.id || path.basename(filePath, '.md'),
       jobTitle: frontmatter.job_title || '',
       company: frontmatter.company || '',
@@ -361,6 +524,29 @@ function parseEntry(filePath: string): KnowledgeBaseEntry | null {
       notes: frontmatter.notes || undefined,
       tags: frontmatter.tags || []
     };
+
+    // Parse enhanced fields (Option A) - only if present
+    const parsedRequirements = parseJsonField<ParsedRequirements>(frontmatter.parsed_requirements);
+    if (parsedRequirements) {
+      entry.parsedRequirements = parsedRequirements;
+    }
+
+    const decisions = parseJsonField<OptimizationDecisions>(frontmatter.decisions);
+    if (decisions) {
+      entry.decisions = decisions;
+    }
+
+    const committeeOutput = parseJsonField<CommitteeOutput>(frontmatter.committee_output);
+    if (committeeOutput) {
+      entry.committeeOutput = committeeOutput;
+    }
+
+    const metrics = parseJsonField<OptimizationMetrics>(frontmatter.metrics);
+    if (metrics) {
+      entry.metrics = metrics;
+    }
+
+    return entry;
   } catch (error) {
     console.error(`[KnowledgeBase] Error parsing file ${filePath}:`, error);
     return null;
@@ -505,7 +691,12 @@ export const knowledgeBaseStore = {
       analysis: data.analysis,
       createdAt: now,
       notes: data.notes,
-      tags: data.tags
+      tags: data.tags,
+      // Enhanced fields (Option A) - pass through if provided
+      parsedRequirements: data.parsedRequirements,
+      decisions: data.decisions,
+      committeeOutput: data.committeeOutput,
+      metrics: data.metrics
     };
 
     const filename = generateFilename(entry);

@@ -535,7 +535,8 @@ export class ObsidianMCPClientImpl implements ObsidianMCPClient {
   private async rebuildIndexFromFilesystem(): Promise<void> {
     if (this.useMock) return;
 
-    const vaultRoot = this.getFullPath(this.vaultPath);
+    // Scan from the vault root to include all subdirectories (resume-content, resume-vaults, etc.)
+    const vaultRoot = this.vaultRootPath;
     if (!fs.existsSync(vaultRoot)) return;
 
     const scanDirectory = (dirPath: string, relativePath: string = '') => {
@@ -547,12 +548,11 @@ export class ObsidianMCPClientImpl implements ObsidianMCPClient {
 
         if (entry.isDirectory()) {
           scanDirectory(entryPath, relPath);
-        } else if (entry.name.endsWith('.md')) {
+        } else if (entry.name.endsWith('.md') || entry.name.endsWith('.json')) {
           try {
             const content = fs.readFileSync(entryPath, 'utf-8');
             const { frontmatter } = this.parseMarkdownWithFrontmatter(content);
-            const notePath = `${this.vaultPath}/${relPath}`;
-            this.updateIndices(notePath, content, frontmatter);
+            this.updateIndices(relPath, content, frontmatter);
           } catch {
             // Skip files that can't be parsed
           }
@@ -592,7 +592,7 @@ export class ObsidianMCPClientImpl implements ObsidianMCPClient {
         const entries = fs.readdirSync(fullPath, { withFileTypes: true });
 
         for (const entry of entries) {
-          if (entry.isFile() && entry.name.endsWith('.md')) {
+          if (entry.isFile() && (entry.name.endsWith('.md') || entry.name.endsWith('.json'))) {
             files.push(path.join(dirPath, entry.name));
           } else if (entry.isDirectory()) {
             // Recursively list subdirectories

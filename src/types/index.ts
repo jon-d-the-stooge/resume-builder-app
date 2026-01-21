@@ -182,3 +182,9 @@ export interface ContentManager {
  * @deprecated Import from 'src/shared/obsidian/client' instead
  */
 export { ObsidianMCPClient } from '../shared/obsidian/client';
+
+// ============================================================================
+// Vault Types (Hierarchical Structure)
+// ============================================================================
+
+export * from './vault';

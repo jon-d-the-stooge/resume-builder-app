@@ -1,10 +1,10 @@
 import { app, BrowserWindow, ipcMain, dialog } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
-import { FileFormat, ValidationResult, ParsedResume, ContentType } from '../types';
+import { FileFormat, ValidationResult, ParsedResume } from '../types';
 import { fileExtractor } from './fileExtractor';
-import { ParserAgentImpl } from './parserAgent';
-import { contentManager } from './contentManager';
+import { vaultManager } from './vaultManager';
+import type { Vault, VaultSection, SectionObject, VaultItem, SectionType } from '../types/vault';
 import { obsidianClient } from './obsidianClient';
 import { jobQueue } from './jobQueue';
 import { csvImporter } from './csvImporter';
@@ -21,10 +21,52 @@ import { chromium, Browser } from 'playwright-core';
 let mainWindow: BrowserWindow | null = null;
 let parsedResumeData: ParsedResume | null = null;
 
-// Initialize parser agent (will use environment variable for API key)
-let parserAgent: ParserAgentImpl | null = null;
+// Current vault ID for the session
+let currentVaultId: string | null = null;
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
+// Helper to build metadata for different content types
+function buildMetadataForType(type: string, formData: any): any {
+  switch (type) {
+    case 'job_entry':
+      return {
+        type: 'experience',
+        title: formData.metadata?.title || formData.content || '',
+        company: formData.metadata?.company || '',
+        location: formData.metadata?.location || null,
+        startDate: formData.metadata?.dateRange?.start || '',
+        endDate: formData.metadata?.dateRange?.end || null
+      };
+    case 'education':
+      return {
+        type: 'education',
+        degree: formData.metadata?.degree || formData.content || '',
+        institution: formData.metadata?.institution || '',
+        location: formData.metadata?.location || null,
+        startDate: formData.metadata?.dateRange?.start || null,
+        endDate: formData.metadata?.dateRange?.end || null
+      };
+    case 'certification':
+      return {
+        type: 'certification',
+        name: formData.metadata?.name || formData.content || '',
+        issuer: formData.metadata?.issuer || '',
+        issueDate: formData.metadata?.dateRange?.start || '',
+        expirationDate: formData.metadata?.dateRange?.end || null
+      };
+    case 'skill':
+      return {
+        type: 'skills-group',
+        category: formData.metadata?.category || 'General'
+      };
+    default:
+      return {
+        type: 'summary',
+        title: formData.content || ''
+      };
+  }
+}
 const SUPPORTED_FORMATS: FileFormat[] = [FileFormat.PDF, FileFormat.DOCX, FileFormat.TXT];
 
 function createWindow() {
@@ -112,13 +154,6 @@ function validateFile(filePath: string, fileName: string, fileSize: number): Val
   };
 }
 
-// Initialize parser agent lazily
-function getParserAgent(): ParserAgentImpl {
-  if (!parserAgent) {
-    parserAgent = new ParserAgentImpl();
-  }
-  return parserAgent;
-}
 
 // Helper to wait for page load after navigation
 function waitForPageLoad(window: BrowserWindow): Promise<void> {
@@ -176,16 +211,95 @@ ipcMain.handle('process-resume', async (event, fileData) => {
 
     console.log(`Extracted ${text.length} characters from resume`);
 
-    // 3. Parse with AI agent
-    console.log('Parsing resume with AI agent...');
-    const agent = getParserAgent();
-    parsedResumeData = await agent.parseResume(text);
+    // 3. Parse with ResumeParser into hierarchical vault structure
+    console.log('Parsing resume into hierarchical vault structure...');
+    const parseResult = await vaultManager.parseAndImport(text, fileData.name);
+    currentVaultId = parseResult.vault.id;
 
-    console.log(`Parsed ${parsedResumeData.jobEntries.length} job entries, ${parsedResumeData.skills.length} skills`);
+    // Convert vault structure to parsedResumeData format for review page compatibility
+    const vault = parseResult.vault;
+    const experienceSection = vault.sections.find(s => s.type === 'experience');
+    const skillsSection = vault.sections.find(s => s.type === 'skills');
+    const educationSection = vault.sections.find(s => s.type === 'education');
+    const certificationsSection = vault.sections.find(s => s.type === 'certifications');
+
+    // Build job entries from experience section objects
+    const jobEntries = (experienceSection?.objects || []).map(obj => {
+      const meta = obj.metadata as any;
+      return {
+        id: obj.id,
+        title: meta.title || '',
+        company: meta.company || '',
+        location: meta.location || null,
+        duration: {
+          start: meta.startDate || '',
+          end: meta.endDate || null
+        },
+        accomplishments: obj.items.map(item => ({
+          id: item.id,
+          description: item.content,
+          parentJobId: obj.id,
+          tags: item.tags || []
+        })),
+        skills: [], // Skills are in separate section
+        confidence: 0.9
+      };
+    });
+
+    // Build skills list from skills section
+    const skills = (skillsSection?.objects || []).flatMap(obj =>
+      obj.items.map(item => ({
+        id: item.id,
+        name: item.content,
+        tags: item.tags || []
+      }))
+    );
+
+    // Build education list
+    const education = (educationSection?.objects || []).map(obj => {
+      const meta = obj.metadata as any;
+      return {
+        id: obj.id,
+        degree: meta.degree || '',
+        institution: meta.institution || '',
+        location: meta.location || null,
+        dateRange: {
+          start: meta.startDate || '',
+          end: meta.endDate || ''
+        },
+        tags: obj.tags || []
+      };
+    });
+
+    // Build certifications list
+    const certifications = (certificationsSection?.objects || []).map(obj => {
+      const meta = obj.metadata as any;
+      return {
+        id: obj.id,
+        name: meta.name || '',
+        issuer: meta.issuer || '',
+        dateIssued: meta.issueDate || '',
+        expirationDate: meta.expirationDate || null,
+        tags: obj.tags || []
+      };
+    });
+
+    parsedResumeData = {
+      jobEntries,
+      skills,
+      education,
+      certifications,
+      warnings: parseResult.warnings,
+      confidence: {
+        overall: parseResult.confidence,
+        bySection: new Map<string, number>()
+      }
+    } as ParsedResume;
+
+    console.log(`Parsed ${jobEntries.length} job entries, ${skills.length} skills into vault ${currentVaultId}`);
 
     // 4. Navigate to review page and wait for it to fully load
     if (mainWindow) {
-      // Set up the listener BEFORE calling loadFile to avoid race condition
       const loadPromise = waitForPageLoad(mainWindow);
       mainWindow.loadFile(path.join(__dirname, '../renderer/review.html'));
       await loadPromise;
@@ -194,11 +308,11 @@ ipcMain.handle('process-resume', async (event, fileData) => {
     return {
       success: true,
       summary: {
-        jobEntries: parsedResumeData.jobEntries.length,
-        skills: parsedResumeData.skills.length,
-        education: parsedResumeData.education.length,
-        certifications: parsedResumeData.certifications.length,
-        confidence: parsedResumeData.confidence.overall
+        jobEntries: jobEntries.length,
+        skills: skills.length,
+        education: education.length,
+        certifications: certifications.length,
+        confidence: parseResult.confidence
       }
     };
   } catch (error) {
@@ -220,95 +334,102 @@ ipcMain.handle('save-parsed-content', async (event, data: ParsedResume) => {
   try {
     console.log('Saving parsed content to vault...');
 
-    // Process job entries
-    for (const job of data.jobEntries) {
-      // Create job entry
-      const jobItem = await contentManager.createContentItem({
-        type: ContentType.JOB_ENTRY,
-        content: `${job.title} at ${job.company}`,
-        tags: ['job-entry', ...extractTagsFromText(job.title)],
-        metadata: {
-          company: job.company,
-          location: job.location,
-          dateRange: job.duration
-        }
-      });
-
-      console.log(`Created job entry: ${jobItem.id}`);
-
-      // Create and link accomplishments
-      for (const acc of job.accomplishments) {
-        const accItem = await contentManager.createContentItem({
-          type: ContentType.ACCOMPLISHMENT,
-          content: acc.description,
-          tags: acc.tags || ['accomplishment'],
-          metadata: {
-            dateRange: acc.dateRange
-          },
-          parentId: jobItem.id
-        });
-
-        // Link accomplishment to job
-        await contentManager.linkContentItems(jobItem.id, accItem.id);
-      }
-
-      // Create and link skills
-      for (const skill of job.skills) {
-        const skillItem = await contentManager.createContentItem({
-          type: ContentType.SKILL,
-          content: skill.name,
-          tags: skill.tags || ['skill'],
-          metadata: {
-            proficiency: skill.proficiency
-          },
-          parentId: jobItem.id
-        });
-
-        // Link skill to job
-        await contentManager.linkContentItems(jobItem.id, skillItem.id);
-      }
+    // The vault was already created during process-resume
+    // Now we sync any modifications made during review
+    if (!currentVaultId) {
+      throw new Error('No vault exists. Please process a resume first.');
     }
 
-    // Process standalone skills (not tied to jobs)
-    for (const skill of data.skills) {
-      if (!skill.parentJobId) {
-        await contentManager.createContentItem({
-          type: ContentType.SKILL,
-          content: skill.name,
-          tags: skill.tags || ['skill'],
-          metadata: {
-            proficiency: skill.proficiency
+    const vault = await vaultManager.getVault(currentVaultId);
+    if (!vault) {
+      throw new Error(`Vault not found: ${currentVaultId}`);
+    }
+
+    // Update experience section with modified job entries
+    const experienceSection = vault.sections.find(s => s.type === 'experience');
+    if (experienceSection) {
+      for (const job of data.jobEntries) {
+        const existingObj = experienceSection.objects.find(o => o.id === job.id);
+        if (existingObj) {
+          // Update job metadata
+          await vaultManager.updateObject(currentVaultId, existingObj.id, {
+            metadata: {
+              ...(existingObj.metadata as any),
+              title: job.title,
+              company: job.company,
+              location: job.location,
+              startDate: job.duration?.start,
+              endDate: job.duration?.end
+            }
+          });
+
+          // Update accomplishments - delete removed, update existing, add new
+          const existingItemIds = new Set(existingObj.items.map(i => i.id));
+          const newItemIds = new Set((job.accomplishments || []).map(a => a.id));
+
+          // Delete removed items
+          for (const item of existingObj.items) {
+            if (!newItemIds.has(item.id)) {
+              await vaultManager.deleteItem(currentVaultId, item.id);
+            }
           }
-        });
-      }
-    }
 
-    // Process education
-    for (const edu of data.education) {
-      await contentManager.createContentItem({
-        type: ContentType.EDUCATION,
-        content: `${edu.degree} from ${edu.institution}`,
-        tags: edu.tags || ['education'],
-        metadata: {
-          location: edu.location,
-          dateRange: edu.dateRange
-        }
-      });
-    }
-
-    // Process certifications
-    for (const cert of data.certifications) {
-      await contentManager.createContentItem({
-        type: ContentType.CERTIFICATION,
-        content: `${cert.name} by ${cert.issuer}`,
-        tags: cert.tags || ['certification'],
-        metadata: {
-          dateRange: {
-            start: cert.dateIssued,
-            end: cert.expirationDate
+          // Update existing or add new items
+          for (let index = 0; index < (job.accomplishments || []).length; index++) {
+            const acc = job.accomplishments[index];
+            if (existingItemIds.has(acc.id)) {
+              // Update existing
+              await vaultManager.updateItem(currentVaultId, acc.id, {
+                content: acc.description,
+                displayOrder: index,
+                tags: acc.tags
+              });
+            } else {
+              // Add new
+              await vaultManager.addItem(currentVaultId, existingObj.id, {
+                objectId: existingObj.id,
+                content: acc.description,
+                displayOrder: index,
+                tags: acc.tags
+              });
+            }
           }
         }
-      });
+      }
+    }
+
+    // Update skills section
+    const skillsSection = vault.sections.find(s => s.type === 'skills');
+    if (skillsSection && skillsSection.objects.length > 0) {
+      const skillsObj = skillsSection.objects[0];
+      const existingSkillIds = new Set(skillsObj.items.map(i => i.id));
+      const newSkillIds = new Set((data.skills || []).map(s => s.id));
+
+      // Delete removed skills
+      for (const item of skillsObj.items) {
+        if (!newSkillIds.has(item.id)) {
+          await vaultManager.deleteItem(currentVaultId, item.id);
+        }
+      }
+
+      // Update existing or add new skills
+      for (let index = 0; index < (data.skills || []).length; index++) {
+        const skill = data.skills[index];
+        if (existingSkillIds.has(skill.id)) {
+          await vaultManager.updateItem(currentVaultId, skill.id, {
+            content: skill.name,
+            displayOrder: index,
+            tags: skill.tags
+          });
+        } else {
+          await vaultManager.addItem(currentVaultId, skillsObj.id, {
+            objectId: skillsObj.id,
+            content: skill.name,
+            displayOrder: index,
+            tags: skill.tags
+          });
+        }
+      }
     }
 
     // Update stored parsed data
@@ -329,16 +450,87 @@ ipcMain.handle('create-manual-content', async (event, formData) => {
       throw new Error('Content type and content text are required');
     }
 
-    const item = await contentManager.createContentItem({
-      type: formData.type as ContentType,
-      content: formData.content,
-      tags: formData.tags || [],
-      metadata: formData.metadata || {},
-      parentId: formData.parentId
-    });
+    // Ensure we have a vault
+    let vault: Vault | null = null;
+    if (currentVaultId) {
+      vault = await vaultManager.getVault(currentVaultId);
+    }
+    if (!vault) {
+      // Create a new vault if none exists
+      vault = await vaultManager.createVault({
+        profile: {
+          firstName: '',
+          lastName: '',
+          email: null,
+          phone: null,
+          location: null,
+          links: [],
+          headline: null
+        }
+      });
+      currentVaultId = vault.id;
+    }
 
-    console.log(`Created manual content item: ${item.id}`);
-    return { success: true, id: item.id };
+    // Map old content types to section types
+    const sectionTypeMap: Record<string, SectionType> = {
+      'job_entry': 'experience',
+      'accomplishment': 'experience',
+      'skill': 'skills',
+      'education': 'education',
+      'certification': 'certifications'
+    };
+
+    const sectionType = sectionTypeMap[formData.type] || 'experience';
+    let section = vault.sections.find(s => s.type === sectionType);
+
+    // Create section if it doesn't exist
+    if (!section) {
+      section = await vaultManager.addSection(vault.id, {
+        vaultId: vault.id,
+        type: sectionType,
+        label: sectionType.charAt(0).toUpperCase() + sectionType.slice(1),
+        objects: [],
+        displayOrder: vault.sections.length
+      });
+    }
+
+    // Create the appropriate object or item based on type
+    let itemId: string;
+
+    if (formData.type === 'accomplishment' && formData.parentId) {
+      // Add as item to existing object
+      const newItem = await vaultManager.addItem(vault.id, formData.parentId, {
+        objectId: formData.parentId,
+        content: formData.content,
+        displayOrder: 0,
+        tags: formData.tags
+      });
+      itemId = newItem.id;
+    } else {
+      // Create as new object in section
+      const metadata = buildMetadataForType(formData.type, formData);
+      const newObject = await vaultManager.addObject(vault.id, section.id, {
+        sectionId: section.id,
+        metadata,
+        items: [],
+        displayOrder: section.objects.length,
+        tags: formData.tags
+      });
+      itemId = newObject.id;
+
+      // If there's content, add it as an item
+      if (formData.content && formData.type !== 'skill') {
+        await vaultManager.addItem(vault.id, newObject.id, {
+          objectId: newObject.id,
+          content: formData.content,
+          displayOrder: 0,
+          tags: formData.tags
+        });
+      }
+    }
+
+    console.log(`Created manual content item: ${itemId}`);
+    return { success: true, id: itemId };
   } catch (error) {
     console.error('Create manual content error:', error);
     throw error;
@@ -361,23 +553,128 @@ ipcMain.handle('search-content', async (event, query) => {
 
     console.log('Searching content with query:', query);
 
-    const results = await contentManager.searchContentItems({
-      contentType: query.contentType,
-      text: query.text,
-      tags: query.tags,
-      dateRange: query.dateRange
-    });
+    // Map old content types to section types for filtering
+    const contentTypeToSection: Record<string, SectionType> = {
+      'job_entry': 'experience',
+      'accomplishment': 'experience',
+      'skill': 'skills',
+      'education': 'education',
+      'certification': 'certifications'
+    };
 
-    return results.map(item => ({
-      id: item.id,
-      type: item.type,
-      content: item.content,
-      tags: item.tags,
-      metadata: item.metadata,
-      parentId: item.parentId,
-      createdAt: item.createdAt.toISOString(),
-      updatedAt: item.updatedAt.toISOString()
-    }));
+    // Get current vault
+    let vault: Vault | null = null;
+    if (currentVaultId) {
+      vault = await vaultManager.getVault(currentVaultId);
+    }
+    if (!vault) {
+      // Try to get any existing vault
+      const allVaults = await vaultManager.getAllVaults();
+      vault = allVaults[0] || null;
+      if (vault) currentVaultId = vault.id;
+    }
+
+    if (!vault) {
+      return []; // No vault exists yet
+    }
+
+    const results: any[] = [];
+    const sectionTypes = query.contentType
+      ? [contentTypeToSection[query.contentType]]
+      : Object.values(contentTypeToSection);
+
+    for (const section of vault.sections) {
+      if (!sectionTypes.includes(section.type)) continue;
+
+      for (const obj of section.objects) {
+        // Map vault structure back to old flat format for renderer compatibility
+        const oldType = Object.entries(contentTypeToSection).find(([, v]) => v === section.type)?.[0] || section.type;
+
+        // For experience objects, return job entries and/or accomplishments based on query
+        if (section.type === 'experience') {
+          // Add the job entry itself only if searching for job_entry or no specific type
+          if (query.contentType === 'job_entry' || !query.contentType) {
+            const meta = obj.metadata as any;
+            results.push({
+              id: obj.id,
+              type: 'job_entry',
+              content: `${meta.title || ''} at ${meta.company || ''}`,
+              tags: obj.tags || [],
+              metadata: {
+                company: meta.company,
+                location: meta.location,
+                dateRange: { start: meta.startDate, end: meta.endDate }
+              },
+              parentId: null,
+              createdAt: vault.metadata.createdAt,
+              updatedAt: vault.metadata.updatedAt
+            });
+          }
+
+          // Add accomplishments as separate items only if searching for accomplishments or no specific type
+          if (query.contentType === 'accomplishment' || !query.contentType) {
+            for (const item of obj.items) {
+              results.push({
+                id: item.id,
+                type: 'accomplishment',
+                content: item.content,
+                tags: item.tags || [],
+                metadata: {},
+                parentId: obj.id,
+                createdAt: vault.metadata.createdAt,
+                updatedAt: vault.metadata.updatedAt
+              });
+            }
+          }
+        } else if (section.type === 'skills') {
+          // Skills are stored as items within skill group objects
+          for (const item of obj.items) {
+            results.push({
+              id: item.id,
+              type: 'skill',
+              content: item.content,
+              tags: item.tags || [],
+              metadata: { category: (obj.metadata as any).category },
+              parentId: obj.id,
+              createdAt: vault.metadata.createdAt,
+              updatedAt: vault.metadata.updatedAt
+            });
+          }
+        } else {
+          // Education, certifications, etc.
+          const meta = obj.metadata as any;
+          results.push({
+            id: obj.id,
+            type: oldType,
+            content: meta.degree || meta.name || meta.title || '',
+            tags: obj.tags || [],
+            metadata: meta,
+            parentId: null,
+            createdAt: vault.metadata.createdAt,
+            updatedAt: vault.metadata.updatedAt
+          });
+        }
+      }
+    }
+
+    // Apply text filter
+    let filteredResults = results;
+    if (query.text) {
+      const searchText = query.text.toLowerCase();
+      filteredResults = results.filter(item =>
+        item.content.toLowerCase().includes(searchText) ||
+        item.tags?.some((t: string) => t.toLowerCase().includes(searchText))
+      );
+    }
+
+    // Apply tags filter
+    if (query.tags && query.tags.length > 0) {
+      filteredResults = filteredResults.filter(item =>
+        query.tags.some((tag: string) => item.tags?.includes(tag))
+      );
+    }
+
+    return filteredResults;
   } catch (error) {
     console.error('Search content error:', error);
     throw error;
@@ -390,23 +687,63 @@ ipcMain.handle('get-content-item', async (event, contentItemId) => {
       throw new Error('Content item ID is required');
     }
 
-    // Get item directly by ID
-    const item = await contentManager.getContentItemById(contentItemId);
+    // Get current vault
+    let vault: Vault | null = null;
+    if (currentVaultId) {
+      vault = await vaultManager.getVault(currentVaultId);
+    }
+    if (!vault) {
+      const allVaults = await vaultManager.getAllVaults();
+      vault = allVaults[0] || null;
+    }
 
-    if (!item) {
+    if (!vault) {
       throw new Error(`Content item not found: ${contentItemId}`);
     }
 
-    return {
-      id: item.id,
-      type: item.type,
-      content: item.content,
-      tags: item.tags,
-      metadata: item.metadata,
-      parentId: item.parentId,
-      createdAt: item.createdAt.toISOString(),
-      updatedAt: item.updatedAt.toISOString()
-    };
+    // Search through vault for the item
+    for (const section of vault.sections) {
+      for (const obj of section.objects) {
+        // Check if it's the object itself
+        if (obj.id === contentItemId) {
+          const meta = obj.metadata as any;
+          const contentTypeMap: Record<string, string> = {
+            'experience': 'job_entry',
+            'education': 'education',
+            'certifications': 'certification',
+            'skills': 'skill'
+          };
+          return {
+            id: obj.id,
+            type: contentTypeMap[section.type] || section.type,
+            content: meta.title || meta.degree || meta.name || '',
+            tags: obj.tags || [],
+            metadata: meta,
+            parentId: null,
+            createdAt: vault.metadata.createdAt,
+            updatedAt: vault.metadata.updatedAt
+          };
+        }
+
+        // Check items within the object
+        for (const item of obj.items) {
+          if (item.id === contentItemId) {
+            return {
+              id: item.id,
+              type: section.type === 'experience' ? 'accomplishment' : 'skill',
+              content: item.content,
+              tags: item.tags || [],
+              metadata: {},
+              parentId: obj.id,
+              createdAt: vault.metadata.createdAt,
+              updatedAt: vault.metadata.updatedAt
+            };
+          }
+        }
+      }
+    }
+
+    throw new Error(`Content item not found: ${contentItemId}`);
   } catch (error) {
     console.error('Get content item error:', error);
     throw error;
@@ -423,15 +760,51 @@ ipcMain.handle('update-content-item', async (event, formData) => {
       throw new Error('Content type and content text are required');
     }
 
-    const updated = await contentManager.updateContentItem(formData.id, {
-      content: formData.content,
-      tags: formData.tags,
-      metadata: formData.metadata,
-      type: formData.type as ContentType
-    });
+    // Get current vault
+    let vault: Vault | null = null;
+    if (currentVaultId) {
+      vault = await vaultManager.getVault(currentVaultId);
+    }
+    if (!vault) {
+      const allVaults = await vaultManager.getAllVaults();
+      vault = allVaults[0] || null;
+      if (vault) currentVaultId = vault.id;
+    }
 
-    console.log(`Updated content item: ${updated.id}`);
-    return { success: true, id: updated.id };
+    if (!vault) {
+      throw new Error(`Content item not found: ${formData.id}`);
+    }
+
+    // Search and update
+    for (const section of vault.sections) {
+      for (const obj of section.objects) {
+        // Check if updating an object
+        if (obj.id === formData.id) {
+          // Update object using vaultManager API
+          await vaultManager.updateObject(currentVaultId!, formData.id, {
+            metadata: formData.metadata ? { ...obj.metadata, ...formData.metadata } : undefined,
+            tags: formData.tags || obj.tags
+          });
+          console.log(`Updated content item: ${formData.id}`);
+          return { success: true, id: formData.id };
+        }
+
+        // Check items within the object
+        for (const item of obj.items) {
+          if (item.id === formData.id) {
+            // Update item using vaultManager API
+            await vaultManager.updateItem(currentVaultId!, formData.id, {
+              content: formData.content,
+              tags: formData.tags || item.tags
+            });
+            console.log(`Updated content item: ${formData.id}`);
+            return { success: true, id: formData.id };
+          }
+        }
+      }
+    }
+
+    throw new Error(`Content item not found: ${formData.id}`);
   } catch (error) {
     console.error('Update content item error:', error);
     throw error;
@@ -444,9 +817,43 @@ ipcMain.handle('delete-content-item', async (event, contentItemId) => {
       throw new Error('Content item ID is required');
     }
 
-    await contentManager.deleteContentItem(contentItemId);
-    console.log(`Deleted content item: ${contentItemId}`);
-    return { success: true };
+    // Get current vault
+    let vault: Vault | null = null;
+    if (currentVaultId) {
+      vault = await vaultManager.getVault(currentVaultId);
+    }
+    if (!vault) {
+      const allVaults = await vaultManager.getAllVaults();
+      vault = allVaults[0] || null;
+      if (vault) currentVaultId = vault.id;
+    }
+
+    if (!vault) {
+      throw new Error(`Content item not found: ${contentItemId}`);
+    }
+
+    // Search and delete
+    for (const section of vault.sections) {
+      // Check if deleting an object
+      const objToDelete = section.objects.find(o => o.id === contentItemId);
+      if (objToDelete) {
+        await vaultManager.deleteObject(currentVaultId!, contentItemId);
+        console.log(`Deleted content item: ${contentItemId}`);
+        return { success: true };
+      }
+
+      // Check items within objects
+      for (const obj of section.objects) {
+        const itemToDelete = obj.items.find(i => i.id === contentItemId);
+        if (itemToDelete) {
+          await vaultManager.deleteItem(currentVaultId!, contentItemId);
+          console.log(`Deleted content item: ${contentItemId}`);
+          return { success: true };
+        }
+      }
+    }
+
+    throw new Error(`Content item not found: ${contentItemId}`);
   } catch (error) {
     console.error('Delete content item error:', error);
     throw error;
@@ -461,22 +868,24 @@ ipcMain.handle('clear-vault', async (event, confirmation) => {
       return { success: false, error: 'Invalid confirmation' };
     }
 
-    // Get all content types and delete them
-    const types = ['job_entry', 'accomplishment', 'skill', 'education', 'certification'];
+    // Count items before clearing
     let totalDeleted = 0;
+    const allVaults = await vaultManager.getAllVaults();
 
-    for (const type of types) {
-      try {
-        const items = await contentManager.searchContentItems({ contentType: type as any });
-        for (const item of items) {
-          await contentManager.deleteContentItem(item.id);
-          totalDeleted++;
+    for (const vault of allVaults) {
+      for (const section of vault.sections) {
+        totalDeleted += section.objects.length;
+        for (const obj of section.objects) {
+          totalDeleted += obj.items.length;
         }
-      } catch (err) {
-        // Continue with other types if one fails
-        console.error(`Error clearing ${type}:`, err);
       }
+      // Delete the vault
+      await vaultManager.deleteVault(vault.id);
     }
+
+    // Clear the current vault reference
+    currentVaultId = null;
+    parsedResumeData = null;
 
     console.log(`Cleared vault: ${totalDeleted} items deleted`);
     return { success: true, deletedCount: totalDeleted };
@@ -585,8 +994,7 @@ ipcMain.handle('save-settings', async (event, newSettings: {
 
   settingsStore.set(updates);
 
-  // Reset parser agent so it picks up new settings on next use
-  parserAgent = null;
+  // Note: LLM client will be recreated on next use with new settings
 
   console.log('Settings updated:', {
     provider: newSettings.llmProvider,
@@ -1015,15 +1423,67 @@ ipcMain.handle('agent-learn-preference', async (event, preference) => {
 // Add inferred skill to vault
 ipcMain.handle('agent-infer-skill', async (event, { skill, source, proficiency }) => {
   try {
-    // Create the skill in the vault
-    const result = await contentManager.createContentItem({
-      type: 'skill' as any,
+    // Ensure we have a vault
+    let vault: Vault | null = null;
+    if (currentVaultId) {
+      vault = await vaultManager.getVault(currentVaultId);
+    }
+    if (!vault) {
+      const allVaults = await vaultManager.getAllVaults();
+      vault = allVaults[0] || null;
+      if (vault) currentVaultId = vault.id;
+    }
+    if (!vault) {
+      // Create a new vault if none exists
+      vault = await vaultManager.createVault({
+        profile: {
+          firstName: '',
+          lastName: '',
+          email: null,
+          phone: null,
+          location: null,
+          links: [],
+          headline: null
+        }
+      });
+      currentVaultId = vault.id;
+    }
+
+    // Find or create skills section
+    let skillsSection = vault.sections.find(s => s.type === 'skills');
+    if (!skillsSection) {
+      skillsSection = await vaultManager.addSection(vault.id, {
+        vaultId: vault.id,
+        type: 'skills',
+        label: 'Skills',
+        objects: [],
+        displayOrder: vault.sections.length
+      });
+    }
+
+    // Find or create a skill group for inferred skills
+    let inferredGroup = skillsSection.objects.find(o =>
+      (o.metadata as any).category === 'Inferred'
+    );
+    if (!inferredGroup) {
+      inferredGroup = await vaultManager.addObject(vault.id, skillsSection.id, {
+        sectionId: skillsSection.id,
+        metadata: {
+          type: 'skills-group',
+          category: 'Inferred'
+        },
+        items: [],
+        displayOrder: skillsSection.objects.length,
+        tags: ['inferred']
+      });
+    }
+
+    // Add the skill as an item
+    const newItem = await vaultManager.addItem(vault.id, inferredGroup.id, {
+      objectId: inferredGroup.id,
       content: skill,
-      tags: ['inferred', 'from-chat'],
-      metadata: {
-        proficiency: proficiency || 'intermediate',
-        notes: `Inferred from conversation: "${source}"`
-      }
+      displayOrder: inferredGroup.items.length,
+      tags: ['inferred', 'from-chat']
     });
 
     // Also learn it as a preference
@@ -1040,7 +1500,7 @@ ipcMain.handle('agent-infer-skill', async (event, { skill, source, proficiency }
       confidence: 0.8
     });
 
-    return { success: true, contentId: result.id };
+    return { success: true, contentId: newItem.id };
   } catch (error) {
     console.error('Skill inference error:', error);
     return { success: false, error: (error as Error).message };
@@ -1334,93 +1794,116 @@ import type { JobPosting, Resume } from '../ats-agent/types';
 // Get resume content from vault for optimizer preview
 ipcMain.handle('optimizer-get-resume-preview', async () => {
   try {
+    // Get current vault or first available vault
+    let vault: Vault | null = null;
+    if (currentVaultId) {
+      vault = await vaultManager.getVault(currentVaultId);
+    }
+    if (!vault) {
+      const allVaults = await vaultManager.getAllVaults();
+      vault = allVaults[0] || null;
+      if (vault) currentVaultId = vault.id;
+    }
+
+    if (!vault) {
+      return {
+        success: false,
+        error: 'No resume content found in vault. Please upload a resume first.'
+      };
+    }
+
     const contentParts: string[] = [];
+    let jobCount = 0;
+    let accomplishmentCount = 0;
+    let skillCount = 0;
+    let educationCount = 0;
+    let certificationCount = 0;
 
-    // Get job entries (work experience)
-    const jobEntries = await contentManager.searchContentItems({
-      contentType: ContentType.JOB_ENTRY
-    });
+    // Process experience section
+    const experienceSection = vault.sections.find(s => s.type === 'experience');
+    if (experienceSection) {
+      for (const obj of experienceSection.objects) {
+        const meta = obj.metadata as any;
+        const jobContent: string[] = [];
+        jobContent.push(`## ${meta.title || ''} at ${meta.company || ''}`);
 
-    for (const job of jobEntries) {
-      const jobContent: string[] = [];
-      jobContent.push(`## ${job.content}`);
+        if (meta.location) {
+          const loc = meta.location;
+          if (typeof loc === 'string') {
+            jobContent.push(`Location: ${loc}`);
+          } else if (typeof loc === 'object' && loc !== null) {
+            const parts: string[] = [];
+            if (loc.city) parts.push(loc.city);
+            if (loc.state) parts.push(loc.state);
+            if (loc.country) parts.push(loc.country);
+            if (parts.length > 0) {
+              jobContent.push(`Location: ${parts.join(', ')}`);
+            }
+          }
+        }
+        if (meta.startDate) {
+          jobContent.push(`Duration: ${meta.startDate} - ${meta.endDate || 'Present'}`);
+        }
 
-      if (job.metadata?.company) {
-        jobContent.push(`Company: ${job.metadata.company}`);
+        // Add accomplishments from items
+        if (obj.items.length > 0) {
+          jobContent.push('');
+          for (const item of obj.items) {
+            jobContent.push(`- ${item.content}`);
+            accomplishmentCount++;
+          }
+        }
+
+        contentParts.push(jobContent.join('\n'));
+        jobCount++;
       }
-      if (job.metadata?.location) {
-        // Format location object properly instead of [object Object]
-        const loc = job.metadata.location;
-        if (typeof loc === 'string') {
-          jobContent.push(`Location: ${loc}`);
-        } else if (typeof loc === 'object' && loc !== null) {
-          const parts: string[] = [];
-          if (loc.city) parts.push(loc.city);
-          if (loc.state) parts.push(loc.state);
-          if (loc.country) parts.push(loc.country);
-          if (parts.length > 0) {
-            jobContent.push(`Location: ${parts.join(', ')}`);
+    }
+
+    // Process skills section
+    const skillsSection = vault.sections.find(s => s.type === 'skills');
+    if (skillsSection) {
+      const skillNames: string[] = [];
+      for (const obj of skillsSection.objects) {
+        for (const item of obj.items) {
+          if (item.content?.trim()) {
+            skillNames.push(item.content.trim());
+            skillCount++;
           }
         }
       }
-      if (job.metadata?.dateRange) {
-        const dr = job.metadata.dateRange;
-        jobContent.push(`Duration: ${dr.start} - ${dr.end || 'Present'}`);
-      }
-
-      contentParts.push(jobContent.join('\n'));
-    }
-
-    // Get accomplishments
-    const accomplishments = await contentManager.searchContentItems({
-      contentType: ContentType.ACCOMPLISHMENT
-    });
-
-    if (accomplishments.length > 0) {
-      contentParts.push('\n## Accomplishments');
-      for (const acc of accomplishments) {
-        contentParts.push(`- ${acc.content}`);
-      }
-    }
-
-    // Get skills
-    const skills = await contentManager.searchContentItems({
-      contentType: ContentType.SKILL
-    });
-
-    if (skills.length > 0) {
-      // Filter out skills with empty or whitespace-only content
-      const skillNames = skills
-        .map(s => s.content?.trim())
-        .filter(name => name && name.length > 0);
-
       if (skillNames.length > 0) {
         contentParts.push('\n## Skills');
         contentParts.push(skillNames.join(', '));
       }
     }
 
-    // Get education
-    const education = await contentManager.searchContentItems({
-      contentType: ContentType.EDUCATION
-    });
-
-    if (education.length > 0) {
-      contentParts.push('\n## Education');
-      for (const edu of education) {
-        contentParts.push(`- ${edu.content}`);
+    // Process education section
+    const educationSection = vault.sections.find(s => s.type === 'education');
+    if (educationSection) {
+      const eduItems: string[] = [];
+      for (const obj of educationSection.objects) {
+        const meta = obj.metadata as any;
+        eduItems.push(`- ${meta.degree || ''} from ${meta.institution || ''}`);
+        educationCount++;
+      }
+      if (eduItems.length > 0) {
+        contentParts.push('\n## Education');
+        contentParts.push(...eduItems);
       }
     }
 
-    // Get certifications
-    const certifications = await contentManager.searchContentItems({
-      contentType: ContentType.CERTIFICATION
-    });
-
-    if (certifications.length > 0) {
-      contentParts.push('\n## Certifications');
-      for (const cert of certifications) {
-        contentParts.push(`- ${cert.content}`);
+    // Process certifications section
+    const certificationsSection = vault.sections.find(s => s.type === 'certifications');
+    if (certificationsSection) {
+      const certItems: string[] = [];
+      for (const obj of certificationsSection.objects) {
+        const meta = obj.metadata as any;
+        certItems.push(`- ${meta.name || ''} by ${meta.issuer || ''}`);
+        certificationCount++;
+      }
+      if (certItems.length > 0) {
+        contentParts.push('\n## Certifications');
+        contentParts.push(...certItems);
       }
     }
 
@@ -1437,11 +1920,11 @@ ipcMain.handle('optimizer-get-resume-preview', async () => {
       success: true,
       content,
       metadata: {
-        jobEntries: jobEntries.length,
-        accomplishments: accomplishments.length,
-        skills: skills.length,
-        education: education.length,
-        certifications: certifications.length
+        jobEntries: jobCount,
+        accomplishments: accomplishmentCount,
+        skills: skillCount,
+        education: educationCount,
+        certifications: certificationCount
       }
     };
   } catch (error) {

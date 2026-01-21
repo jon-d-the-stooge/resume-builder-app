@@ -1174,6 +1174,7 @@ async function saveToApplications(results) {
 
 /**
  * Save completed optimization to Knowledge Base
+ * Now includes enhanced committee output and decision tracking (Option A)
  */
 async function saveToKnowledgeBase(results) {
   try {
@@ -1207,10 +1208,39 @@ async function saveToKnowledgeBase(results) {
       }
     };
 
+    // === Enhanced fields for Option A (Knowledge Base audit trail) ===
+
+    // Parsed requirements from selector stage
+    if (results.parsedRequirements) {
+      entry.parsedRequirements = results.parsedRequirements;
+    }
+
+    // Decision tracking (what was included/excluded and why)
+    if (results.decisions) {
+      entry.decisions = results.decisions;
+    }
+
+    // Committee output (advocate/critic analysis)
+    if (results.enhancedCommitteeOutput) {
+      entry.committeeOutput = results.enhancedCommitteeOutput;
+    }
+
+    // Performance metrics
+    if (results.metrics) {
+      entry.metrics = {
+        durationMs: results.metrics.processingTimeMs || 0,
+        vaultItemsConsidered: results.metrics.vaultItemsConsidered,
+        itemsSelected: results.metrics.itemsSelected
+      };
+    }
+
     const saveResult = await ipcRenderer.invoke('knowledge-base-save', entry);
 
     if (saveResult.success) {
       console.log('[Optimizer] Saved to Knowledge Base:', saveResult.entry.id);
+      if (entry.committeeOutput) {
+        console.log('[Optimizer] Enhanced committee analysis preserved');
+      }
     } else {
       console.warn('[Optimizer] Knowledge Base save failed:', saveResult.error);
     }

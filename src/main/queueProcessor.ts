@@ -21,8 +21,8 @@ import type {
 } from '../ats-agent/types';
 import type { ReframingRecommendation } from '../ats-agent/holistic/holisticAnalyzer';
 import { jobQueue, QueuedJob, OptimizationResult } from './jobQueue';
-import { contentManager } from './contentManager';
-import { ContentType } from '../types';
+import { vaultManager } from './vaultManager';
+import type { Vault, VaultSection, SectionObject, VaultItem } from '../types/vault';
 import { settingsStore } from './settingsStore';
 import { LLMClient } from '../shared/llm/client';
 
@@ -174,82 +174,140 @@ export class QueueProcessor {
   }
 
   /**
-   * Retrieves resume content from the Obsidian vault
+   * Retrieves resume content from the hierarchical vault
    *
-   * Searches for job entries and their associated accomplishments
-   * to build a complete resume representation.
+   * Traverses the vault sections to build a complete resume representation.
    */
   private async getResumeFromVault(): Promise<Resume> {
     const contentParts: string[] = [];
+    let jobCount = 0;
+    let accomplishmentCount = 0;
+    let skillCount = 0;
+    let educationCount = 0;
+    let certificationCount = 0;
 
-    // Get job entries (work experience)
-    const jobEntries = await contentManager.searchContentItems({
-      contentType: ContentType.JOB_ENTRY
-    });
-
-    for (const job of jobEntries) {
-      const jobContent: string[] = [];
-      jobContent.push(`## ${job.content}`);
-
-      // Add metadata
-      if (job.metadata?.company) {
-        jobContent.push(`Company: ${job.metadata.company}`);
-      }
-      if (job.metadata?.location) {
-        jobContent.push(`Location: ${job.metadata.location}`);
-      }
-      if (job.metadata?.dateRange) {
-        const dr = job.metadata.dateRange;
-        jobContent.push(`Duration: ${dr.start} - ${dr.end || 'Present'}`);
-      }
-
-      contentParts.push(jobContent.join('\n'));
+    // Get all vaults and use the first one (or most recent)
+    const vaults = await vaultManager.getAllVaults();
+    if (vaults.length === 0) {
+      throw new Error('No resume content found in vault. Please upload a resume first.');
     }
 
-    // Get accomplishments
-    const accomplishments = await contentManager.searchContentItems({
-      contentType: ContentType.ACCOMPLISHMENT
-    });
+    // Use the most recently updated vault
+    const vault = vaults.sort((a, b) =>
+      new Date(b.metadata.updatedAt).getTime() - new Date(a.metadata.updatedAt).getTime()
+    )[0];
 
-    if (accomplishments.length > 0) {
-      contentParts.push('\n## Accomplishments');
-      for (const acc of accomplishments) {
-        contentParts.push(`- ${acc.content}`);
-      }
-    }
+    // Process each section in the vault
+    for (const section of vault.sections) {
+      switch (section.type) {
+        case 'experience': {
+          // Get job entries (work experience)
+          for (const obj of section.objects) {
+            const jobContent: string[] = [];
+            const meta = obj.metadata as any;
+            jobContent.push(`## ${meta?.title || obj.id}`);
 
-    // Get skills
-    const skills = await contentManager.searchContentItems({
-      contentType: ContentType.SKILL
-    });
+            if (meta?.company) {
+              jobContent.push(`Company: ${meta.company}`);
+            }
+            if (meta?.location) {
+              const loc = meta.location;
+              const locStr = typeof loc === 'string' ? loc :
+                [loc.city, loc.state, loc.country].filter(Boolean).join(', ');
+              jobContent.push(`Location: ${locStr}`);
+            }
+            if (meta?.dateRange) {
+              const dr = meta.dateRange;
+              jobContent.push(`Duration: ${dr.start} - ${dr.end || 'Present'}`);
+            }
 
-    if (skills.length > 0) {
-      contentParts.push('\n## Skills');
-      const skillNames = skills.map(s => s.content);
-      contentParts.push(skillNames.join(', '));
-    }
+            // Add accomplishments from items
+            if (obj.items.length > 0) {
+              jobContent.push('\nAccomplishments:');
+              for (const item of obj.items) {
+                jobContent.push(`- ${item.content}`);
+                accomplishmentCount++;
+              }
+            }
 
-    // Get education
-    const education = await contentManager.searchContentItems({
-      contentType: ContentType.EDUCATION
-    });
+            contentParts.push(jobContent.join('\n'));
+            jobCount++;
+          }
+          break;
+        }
 
-    if (education.length > 0) {
-      contentParts.push('\n## Education');
-      for (const edu of education) {
-        contentParts.push(`- ${edu.content}`);
-      }
-    }
+        case 'skills': {
+          const skillNames: string[] = [];
+          for (const obj of section.objects) {
+            // Skills can be objects with items, or the object itself is the skill
+            if (obj.items.length > 0) {
+              for (const item of obj.items) {
+                skillNames.push(item.content);
+                skillCount++;
+              }
+            } else {
+              const meta = obj.metadata as any;
+              skillNames.push(meta?.name || obj.id);
+              skillCount++;
+            }
+          }
+          if (skillNames.length > 0) {
+            contentParts.push('\n## Skills');
+            contentParts.push(skillNames.join(', '));
+          }
+          break;
+        }
 
-    // Get certifications
-    const certifications = await contentManager.searchContentItems({
-      contentType: ContentType.CERTIFICATION
-    });
+        case 'education': {
+          const eduContent: string[] = ['\n## Education'];
+          for (const obj of section.objects) {
+            const meta = obj.metadata as any;
+            const degree = meta?.degree || '';
+            const institution = meta?.institution || '';
+            const year = meta?.graduationYear || meta?.dateRange?.end || '';
+            eduContent.push(`- ${degree}${institution ? ` - ${institution}` : ''}${year ? ` (${year})` : ''}`);
+            educationCount++;
+          }
+          if (educationCount > 0) {
+            contentParts.push(eduContent.join('\n'));
+          }
+          break;
+        }
 
-    if (certifications.length > 0) {
-      contentParts.push('\n## Certifications');
-      for (const cert of certifications) {
-        contentParts.push(`- ${cert.content}`);
+        case 'certifications': {
+          const certContent: string[] = ['\n## Certifications'];
+          for (const obj of section.objects) {
+            const meta = obj.metadata as any;
+            const name = meta?.name || meta?.title || obj.id;
+            const issuer = meta?.issuer || '';
+            const year = meta?.dateObtained || meta?.year || '';
+            certContent.push(`- ${name}${issuer ? ` (${issuer})` : ''}${year ? ` - ${year}` : ''}`);
+            certificationCount++;
+          }
+          if (certificationCount > 0) {
+            contentParts.push(certContent.join('\n'));
+          }
+          break;
+        }
+
+        case 'projects': {
+          const projContent: string[] = ['\n## Projects'];
+          for (const obj of section.objects) {
+            const meta = obj.metadata as any;
+            const name = meta?.name || meta?.title || obj.id;
+            const desc = meta?.description || '';
+            projContent.push(`- ${name}${desc ? `: ${desc}` : ''}`);
+
+            // Add project items/details
+            for (const item of obj.items) {
+              projContent.push(`  - ${item.content}`);
+            }
+          }
+          if (section.objects.length > 0) {
+            contentParts.push(projContent.join('\n'));
+          }
+          break;
+        }
       }
     }
 
@@ -261,18 +319,18 @@ export class QueueProcessor {
     }
 
     return {
-      id: 'user-resume',
+      id: vault.id,
       content,
       format: 'markdown',
       metadata: {
-        source: 'obsidian-vault',
+        source: 'hierarchical-vault',
         generatedAt: new Date().toISOString(),
         itemCounts: {
-          jobEntries: jobEntries.length,
-          accomplishments: accomplishments.length,
-          skills: skills.length,
-          education: education.length,
-          certifications: certifications.length
+          jobEntries: jobCount,
+          accomplishments: accomplishmentCount,
+          skills: skillCount,
+          education: educationCount,
+          certifications: certificationCount
         }
       }
     };

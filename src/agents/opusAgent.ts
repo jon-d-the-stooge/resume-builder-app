@@ -10,10 +10,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { LLMClient } from '../shared/llm';
 import { obsidianClient } from '../main/obsidianClient';
-import { contentManager } from '../main/contentManager';
+import { vaultManager } from '../main/vaultManager';
 import { settingsStore } from '../main/settingsStore';
 import { jobQueue, QueuedJob, OptimizationResult } from '../main/jobQueue';
-import { ContentType, Frontmatter } from '../shared/obsidian/types';
+import type { Vault, VaultSection, SectionObject, VaultItem } from '../types/vault';
 
 /**
  * User preference for job searches
@@ -1184,33 +1184,59 @@ Use that question—or questions like it—to help users think bigger than their
     const lines: string[] = [baseContext];
 
     try {
+      // Get all vaults and use the most recent one
+      const vaults = await vaultManager.getAllVaults();
+      if (vaults.length === 0) {
+        return lines.join('\n');
+      }
+
+      const vault = vaults.sort((a, b) =>
+        new Date(b.metadata.updatedAt).getTime() - new Date(a.metadata.updatedAt).getTime()
+      )[0];
+
       // Get skills from vault
-      const skills = await contentManager.searchContentItems({ contentType: 'skill' as any });
-      if (skills.length > 0) {
+      const skillsSection = vault.sections.find(s => s.type === 'skills');
+      if (skillsSection && skillsSection.objects.length > 0) {
         lines.push('\n**Their documented skills:**');
-        const skillList = skills.slice(0, 10).map(s => s.content).join(', ');
+        const skillNames: string[] = [];
+        for (const obj of skillsSection.objects) {
+          if (obj.items.length > 0) {
+            for (const item of obj.items) {
+              skillNames.push(item.content);
+            }
+          } else {
+            const meta = obj.metadata as any;
+            skillNames.push(meta?.name || obj.id);
+          }
+        }
+        const skillList = skillNames.slice(0, 10).join(', ');
         lines.push(skillList);
-        if (skills.length > 10) {
-          lines.push(`(and ${skills.length - 10} more)`);
+        if (skillNames.length > 10) {
+          lines.push(`(and ${skillNames.length - 10} more)`);
         }
       }
 
       // Get job history from vault
-      const jobs = await contentManager.searchContentItems({ contentType: 'job_entry' as any });
-      if (jobs.length > 0) {
+      const experienceSection = vault.sections.find(s => s.type === 'experience');
+      if (experienceSection && experienceSection.objects.length > 0) {
         lines.push('\n**Their job history:**');
-        for (const job of jobs.slice(0, 5)) {
-          const company = job.metadata?.company || 'Unknown company';
-          // Get title from first line of content or custom fields
-          const title = job.metadata?.customFields?.title || job.content.split('\n')[0].substring(0, 50);
+        for (const obj of experienceSection.objects.slice(0, 5)) {
+          const meta = obj.metadata as any;
+          const company = meta?.company || 'Unknown company';
+          const title = meta?.title || obj.id;
           lines.push(`- ${title} at ${company}`);
         }
       }
 
-      // Get accomplishments from vault
-      const accomplishments = await contentManager.searchContentItems({ contentType: 'accomplishment' as any });
-      if (accomplishments.length > 0) {
-        lines.push(`\n**Notable accomplishments:** ${accomplishments.length} documented`);
+      // Count accomplishments from vault
+      let accomplishmentCount = 0;
+      if (experienceSection) {
+        for (const obj of experienceSection.objects) {
+          accomplishmentCount += obj.items.length;
+        }
+      }
+      if (accomplishmentCount > 0) {
+        lines.push(`\n**Notable accomplishments:** ${accomplishmentCount} documented`);
       }
     } catch (error) {
       // Vault might not be configured - that's okay
@@ -1271,40 +1297,46 @@ Use that question—or questions like it—to help users think bigger than their
 
     // 2. Aggregate from vault job entries
     try {
-      const jobEntries = await contentManager.searchContentItems({ contentType: 'job_entry' as any });
-      for (const entry of jobEntries) {
-        const companyName = (entry.metadata?.company || '').toLowerCase().trim();
-        if (!companyName) continue;
+      const vaults = await vaultManager.getAllVaults();
+      for (const vault of vaults) {
+        const experienceSection = vault.sections.find(s => s.type === 'experience');
+        if (!experienceSection) continue;
 
-        // Convert Location object to string if needed
-        const locationObj = entry.metadata?.location;
-        const locationStr = locationObj
-          ? (typeof locationObj === 'string'
-            ? locationObj
-            : [locationObj.city, locationObj.state, locationObj.country].filter(Boolean).join(', '))
-          : '';
+        for (const obj of experienceSection.objects) {
+          const meta = obj.metadata as any;
+          const companyName = (meta?.company || '').toLowerCase().trim();
+          if (!companyName) continue;
 
-        const existing = companies.get(companyName);
-        if (existing) {
-          // Update source to vault if not already
-          if (existing.source !== 'vault') {
-            existing.source = 'vault';
+          // Convert Location object to string if needed
+          const locationObj = meta?.location;
+          const locationStr = locationObj
+            ? (typeof locationObj === 'string'
+              ? locationObj
+              : [locationObj.city, locationObj.state, locationObj.country].filter(Boolean).join(', '))
+            : '';
+
+          const existing = companies.get(companyName);
+          if (existing) {
+            // Update source to vault if not already
+            if (existing.source !== 'vault') {
+              existing.source = 'vault';
+            }
+            // Add location if available
+            if (locationStr && !existing.locations.includes(locationStr)) {
+              existing.locations.push(locationStr);
+            }
+          } else {
+            companies.set(companyName, {
+              name: meta?.company || companyName,
+              locations: locationStr ? [locationStr] : [],
+              industries: [],
+              lastSeen: new Date(vault.metadata.updatedAt),
+              source: 'vault',
+              jobCount: 1,
+              appliedStatus: 'applied', // In vault means they worked there or applied
+              relatedSkills: []
+            });
           }
-          // Add location if available
-          if (locationStr && !existing.locations.includes(locationStr)) {
-            existing.locations.push(locationStr);
-          }
-        } else {
-          companies.set(companyName, {
-            name: entry.metadata?.company || companyName,
-            locations: locationStr ? [locationStr] : [],
-            industries: [],
-            lastSeen: entry.updatedAt,
-            source: 'vault',
-            jobCount: 1,
-            appliedStatus: 'applied', // In vault means they worked there or applied
-            relatedSkills: []
-          });
         }
       }
     } catch (err) {

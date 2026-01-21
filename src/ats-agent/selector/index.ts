@@ -38,3 +38,12 @@ export {
 
 // Resume builder
 export { buildDraftResume } from './resumeBuilder';
+
+// Vault adapter (for hierarchical vault integration)
+export {
+  vaultToContentVaultItems,
+  formatVaultItemForLLM,
+  formatVaultContentForLLM,
+  getExperienceMetadata,
+  hasStructuredExperienceMetadata
+} from './vaultAdapter';

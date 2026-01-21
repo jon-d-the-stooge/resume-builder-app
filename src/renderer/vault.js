@@ -183,7 +183,7 @@ function createContentCard(item) {
       metaItem.appendChild(label);
 
       const value = document.createElement('span');
-      value.textContent = item.metadata.location;
+      value.textContent = formatLocation(item.metadata.location);
       metaItem.appendChild(value);
 
       metadata.appendChild(metaItem);
@@ -313,6 +313,18 @@ function formatType(type) {
     certification: 'Certification'
   };
   return typeNames[type] || type;
+}
+
+function formatLocation(location) {
+  if (!location) return '';
+  if (typeof location === 'string') return location;
+
+  const parts = [];
+  if (location.city) parts.push(location.city);
+  if (location.state) parts.push(location.state);
+  if (location.country && !location.city && !location.state) parts.push(location.country);
+
+  return parts.join(', ');
 }
 
 function formatDate(dateStr) {

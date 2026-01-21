@@ -242,6 +242,66 @@ export interface PipelineConfigInput {
 }
 
 /**
+ * Enhanced committee output for Knowledge Base persistence
+ * Captures the full advocate/critic dialogue for audit trail
+ */
+export interface EnhancedCommitteeOutput {
+  /** Advocate's fit score from final round */
+  advocateFitScore: number;
+  /** Critic's fit score from final round */
+  criticFitScore: number;
+  /** Number of dialogue rounds */
+  rounds: number;
+  /** Why optimization stopped */
+  terminationReason: 'consensus' | 'target_reached' | 'max_rounds' | 'no_improvement';
+  /** Connections found between resume and job requirements */
+  connections: Array<{
+    requirement: string;
+    evidence: string;
+    strength: 'strong' | 'moderate' | 'inferred' | 'transferable';
+  }>;
+  /** Validated strengths from the resume */
+  strengths: string[];
+  /** Issues raised by the critic */
+  challenges: Array<{
+    type: 'overclaim' | 'unsupported' | 'missing' | 'weak_evidence' | 'terminology_gap' | 'blandification';
+    claim: string;
+    issue: string;
+    severity: 'critical' | 'major' | 'minor';
+  }>;
+  /** Genuine gaps that couldn't be addressed through reframing */
+  genuineGaps: Array<{
+    requirement: string;
+    reason: string;
+    isRequired: boolean;
+  }>;
+}
+
+/**
+ * Decision tracking for audit trail
+ */
+export interface OptimizationDecisionTracking {
+  /** Items included in the final resume with reasons */
+  includedItems: Array<{
+    itemId: string;
+    reason: string;
+    matchedRequirements?: string[];
+  }>;
+  /** Items that were excluded (below relevance threshold or not selected) */
+  excludedItems: Array<{
+    itemId: string;
+    reason: string;
+  }>;
+  /** Modifications made during optimization */
+  modifiedItems: Array<{
+    originalContent: string;
+    modifiedContent: string;
+    keywordsAdded: string[];
+    rationale: string;
+  }>;
+}
+
+/**
  * Result from the full pipeline
  */
 export interface PipelineResult {
@@ -274,6 +334,24 @@ export interface PipelineResult {
     finalFit: number;
     /** Total processing time in ms */
     processingTimeMs: number;
+  };
+
+  // === Enhanced Output for Knowledge Base (Option A) ===
+
+  /** Full committee analysis for audit trail */
+  enhancedCommitteeOutput?: EnhancedCommitteeOutput;
+
+  /** Decision tracking for transparency */
+  decisions?: OptimizationDecisionTracking;
+
+  /** Parsed job requirements for structured storage */
+  parsedRequirements?: {
+    required: string[];
+    preferred: string[];
+    skills: string[];
+    experience: string | null;
+    education: string | null;
+    themes?: string[];
   };
 }
 
