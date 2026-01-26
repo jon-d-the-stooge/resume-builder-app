@@ -1,75 +1,50 @@
-import express from 'express';
+/**
+ * Express server setup - main entry point for the backend API server.
+ * Configures Express middleware, mounts routes, and starts the HTTP server.
+ * This will serve as the web-based API alternative to Electron IPC.
+ */
+
+import express, { Application } from 'express';
 import cors from 'cors';
-import path from 'path';
-import dotenv from 'dotenv';
 
-// Load environment variables
-dotenv.config();
+const app: Application = express();
 
-const app = express();
-const PORT = process.env.PORT || 3001;
-
-// Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// CORS configuration
-const corsOptions = {
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+// CORS configuration - allow all localhost origins in development
+const corsOptions: cors.CorsOptions = {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (like mobile apps or curl)
+    if (!origin) {
+      return callback(null, true);
+    }
+    // Allow any localhost origin (any port)
+    if (origin.match(/^https?:\/\/localhost(:\d+)?$/)) {
+      return callback(null, true);
+    }
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true,
 };
+
+// Middleware
 app.use(cors(corsOptions));
+app.use(express.json());
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    env: process.env.NODE_ENV || 'development',
+  res.json({ status: 'ok' });
+});
+
+// Start function
+export const start = (): void => {
+  const PORT = process.env.PORT || 3001;
+  app.listen(PORT, () => {
+    console.log(`Server listening on port ${PORT}`);
   });
-});
+};
 
-// Placeholder API routes - these will be implemented by converting IPC handlers
-app.get('/api/vaults', (req, res) => {
-  // TODO: Convert from ipcMain.handle('get-vaults', ...)
-  res.json({ vaults: [], message: 'Not yet implemented' });
-});
-
-app.get('/api/profile', (req, res) => {
-  // TODO: Convert from ipcMain.handle('get-profile-stats', ...)
-  res.json({ stats: {}, message: 'Not yet implemented' });
-});
-
-app.post('/api/optimize', (req, res) => {
-  // TODO: Convert from ipcMain.handle('optimize-resume', ...)
-  res.json({ success: false, message: 'Not yet implemented' });
-});
-
-// Serve static files in production
-if (process.env.NODE_ENV === 'production') {
-  const frontendPath = path.join(__dirname, '../frontend');
-  app.use(express.static(frontendPath));
-
-  // SPA fallback - serve index.html for non-API routes
-  app.get('*', (req, res) => {
-    if (!req.path.startsWith('/api')) {
-      res.sendFile(path.join(frontendPath, 'index.web.html'));
-    }
-  });
+// Start server when run directly
+if (require.main === module) {
+  start();
 }
 
-// Error handling middleware
-app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('Server error:', err);
-  res.status(500).json({
-    error: 'Internal server error',
-    message: process.env.NODE_ENV === 'development' ? err.message : undefined,
-  });
-});
-
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Backend server running at http://localhost:${PORT}`);
-  console.log(`📡 API endpoints available at http://localhost:${PORT}/api`);
-  console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
-});
+export default app;
