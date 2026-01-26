@@ -6,6 +6,7 @@
 
 import express, { Application } from 'express';
 import cors from 'cors';
+import vaultsRouter from './routes/vaults';
 
 const app: Application = express();
 
@@ -33,6 +34,9 @@ app.use(express.json());
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
+
+// Routes
+app.use('/api/vaults', vaultsRouter);
 
 // Start function
 export const start = (): void => {
