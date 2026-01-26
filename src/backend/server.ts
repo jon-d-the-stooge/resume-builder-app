@@ -4,6 +4,9 @@
  * This will serve as the web-based API alternative to Electron IPC.
  */
 
+// Load environment variables first, before any other imports
+import 'dotenv/config';
+
 import express, { Application } from 'express';
 import cors from 'cors';
 import vaultsRouter from './routes/vaults';
@@ -16,6 +19,7 @@ import aiRouter from './routes/ai';
 import adminRouter from './routes/admin';
 import usageRouter from './routes/usage';
 import { rateLimiter } from './middleware/rateLimiter';
+import { authenticateRequest } from './middleware/auth';
 
 const app: Application = express();
 
@@ -39,9 +43,17 @@ const corsOptions: cors.CorsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
-// Health check endpoint
+// Health check endpoint (unauthenticated - for load balancers/monitoring)
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
+});
+
+// Apply authentication to all /api routes below this point
+app.use('/api', authenticateRequest);
+
+// Current user endpoint - returns the authenticated user
+app.get('/api/me', (req, res) => {
+  res.json(req.user);
 });
 
 // Routes
