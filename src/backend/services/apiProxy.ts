@@ -18,6 +18,7 @@ import {
   LLMResponse,
   DEFAULT_LLM_CONFIG
 } from '../../shared/llm/types';
+import { usageTracker } from './usageTracker';
 
 /**
  * Usage statistics for tracking API consumption
@@ -125,8 +126,12 @@ export class LLMProxy {
 
   /**
    * Send a completion request to the LLM
+   *
+   * @param request - The LLM request parameters
+   * @param provider - Optional provider override
+   * @param userId - Optional user ID for usage tracking (defaults to 'anonymous')
    */
-  async complete(request: LLMRequest, provider?: LLMProvider): Promise<LLMResponse> {
+  async complete(request: LLMRequest, provider?: LLMProvider, userId?: string): Promise<LLMResponse> {
     const activeProvider = provider || this.provider;
     const model = request.model || DEFAULT_LLM_CONFIG[activeProvider].model;
     const temperature = request.temperature ?? DEFAULT_LLM_CONFIG[activeProvider].temperature;
@@ -163,6 +168,17 @@ export class LLMProxy {
     // Log usage and update stats
     const elapsedMs = Date.now() - start;
     this.updateStats(response, model);
+
+    // Track usage in persistent storage
+    const totalTokens = response.usage
+      ? response.usage.inputTokens + response.usage.outputTokens
+      : undefined;
+    usageTracker.trackUsage(
+      userId || 'anonymous',
+      activeProvider as 'anthropic' | 'openai',
+      model,
+      totalTokens
+    );
 
     console.log(
       `[LLMProxy] Request complete model=${response.model} ` +
@@ -374,6 +390,10 @@ export class RapidAPIProxy {
 
   /**
    * Search jobs using JSearch API
+   *
+   * @param query - The job search query
+   * @param options - Search options
+   * @param userId - Optional user ID for usage tracking (defaults to 'anonymous')
    */
   async searchJSearch(
     query: string,
@@ -382,7 +402,8 @@ export class RapidAPIProxy {
       remote?: boolean;
       page?: number;
       numPages?: number;
-    } = {}
+    } = {},
+    userId?: string
   ): Promise<JSearchResponse> {
     if (!this.apiKey) {
       throw new Error('RapidAPI key not configured. Set RAPIDAPI_KEY environment variable.');
@@ -416,6 +437,10 @@ export class RapidAPIProxy {
 
       const data = JSON.parse(response) as JSearchResponse;
       console.log(`[RapidAPIProxy] JSearch returned ${data.data?.length || 0} results`);
+
+      // Track usage in persistent storage
+      usageTracker.trackUsage(userId || 'anonymous', 'rapidapi', 'jsearch-search');
+
       return data;
     } catch (error) {
       this.stats.errors++;
@@ -426,8 +451,11 @@ export class RapidAPIProxy {
 
   /**
    * Get job details by ID from JSearch
+   *
+   * @param jobId - The job ID to look up
+   * @param userId - Optional user ID for usage tracking (defaults to 'anonymous')
    */
-  async getJobDetails(jobId: string): Promise<JSearchJobDetails | null> {
+  async getJobDetails(jobId: string, userId?: string): Promise<JSearchJobDetails | null> {
     if (!this.apiKey) {
       throw new Error('RapidAPI key not configured. Set RAPIDAPI_KEY environment variable.');
     }
@@ -446,6 +474,10 @@ export class RapidAPIProxy {
       });
 
       const data = JSON.parse(response);
+
+      // Track usage in persistent storage
+      usageTracker.trackUsage(userId || 'anonymous', 'rapidapi', 'jsearch-details');
+
       return data.data?.[0] || null;
     } catch (error) {
       this.stats.errors++;

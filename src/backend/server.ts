@@ -13,6 +13,9 @@ import knowledgeBaseRouter from './routes/knowledgeBase';
 import settingsRouter from './routes/settings';
 import contentRouter from './routes/content';
 import aiRouter from './routes/ai';
+import adminRouter from './routes/admin';
+import usageRouter from './routes/usage';
+import { rateLimiter } from './middleware/rateLimiter';
 
 const app: Application = express();
 
@@ -48,7 +51,9 @@ app.use('/api/applications', applicationsRouter);
 app.use('/api/knowledge-base', knowledgeBaseRouter);
 app.use('/api/settings', settingsRouter);
 app.use('/api/content', contentRouter);
-app.use('/api/ai', aiRouter);
+app.use('/api/ai', rateLimiter, aiRouter);
+app.use('/api/admin', adminRouter);
+app.use('/api/usage', usageRouter);
 
 // Start function
 export const start = (): void => {

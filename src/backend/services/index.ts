@@ -18,3 +18,13 @@ export { markdownGenerator } from '../../main/markdownGenerator';
 // API proxy services for external API calls
 export { llmProxy, rapidAPIProxy, LLMProxy, RapidAPIProxy } from './apiProxy';
 export type { UsageStats, RapidAPIStats, JSearchJob, JSearchResponse, JSearchJobDetails } from './apiProxy';
+
+// Usage tracking service
+export { usageTracker } from './usageTracker';
+export type {
+  ServiceType,
+  UsageRecord,
+  UsageSummary,
+  UserUsageSummary,
+  AdminUsageSummary
+} from './usageTracker';
