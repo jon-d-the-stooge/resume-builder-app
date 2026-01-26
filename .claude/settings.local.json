@@ -6,7 +6,8 @@
       "Skill(feature-dev:feature-dev)",
       "mcp__playwright__browser_navigate",
       "mcp__playwright__browser_evaluate",
-      "mcp__playwright__browser_wait_for"
+      "mcp__playwright__browser_wait_for",
+      "Bash(curl:*)"
     ]
   }
 }

@@ -7,6 +7,12 @@
 import express, { Application } from 'express';
 import cors from 'cors';
 import vaultsRouter from './routes/vaults';
+import jobsRouter from './routes/jobs';
+import applicationsRouter from './routes/applications';
+import knowledgeBaseRouter from './routes/knowledgeBase';
+import settingsRouter from './routes/settings';
+import contentRouter from './routes/content';
+import aiRouter from './routes/ai';
 
 const app: Application = express();
 
@@ -37,6 +43,12 @@ app.get('/api/health', (req, res) => {
 
 // Routes
 app.use('/api/vaults', vaultsRouter);
+app.use('/api/jobs', jobsRouter);
+app.use('/api/applications', applicationsRouter);
+app.use('/api/knowledge-base', knowledgeBaseRouter);
+app.use('/api/settings', settingsRouter);
+app.use('/api/content', contentRouter);
+app.use('/api/ai', aiRouter);
 
 // Start function
 export const start = (): void => {

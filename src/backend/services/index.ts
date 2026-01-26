@@ -14,3 +14,7 @@ export { contentManager } from '../../main/contentManager';
 export { ResumeParser } from '../../main/resumeParser';
 export { csvImporter } from '../../main/csvImporter';
 export { markdownGenerator } from '../../main/markdownGenerator';
+
+// API proxy services for external API calls
+export { llmProxy, rapidAPIProxy, LLMProxy, RapidAPIProxy } from './apiProxy';
+export type { UsageStats, RapidAPIStats, JSearchJob, JSearchResponse, JSearchJobDetails } from './apiProxy';
