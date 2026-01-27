@@ -1,7 +1,7 @@
 /**
  * Applications Store Module
  *
- * Stores completed resume optimizations as markdown files in the vault's Applications/ folder.
+ * Stores completed resume optimizations as markdown files in the Applications/ folder.
  * Solves the UX problem: previously generated resumes not retrievable.
  *
  * Each application is stored as a markdown file with YAML frontmatter containing:
@@ -10,9 +10,8 @@
  * - Optimization results (score, iterations)
  */
 
-import * as fs from 'fs';
 import * as path from 'path';
-import { obsidianClient } from './obsidianClient';
+import { StorageProvider, FileStorage } from '../shared/storage';
 
 // ============================================================================
 // Type Definitions
@@ -73,38 +72,6 @@ const DEFAULT_USER_ID = 'default';
  */
 function getEffectiveUserId(userId: string | undefined): string {
   return userId || DEFAULT_USER_ID;
-}
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-/**
- * Get the path to the Applications folder in the vault
- */
-function getApplicationsPath(): string | null {
-  const vaultPath = obsidianClient.getVaultRootPath();
-  if (!vaultPath) {
-    return null;
-  }
-  return path.join(vaultPath, APPLICATIONS_FOLDER);
-}
-
-/**
- * Ensure the Applications folder exists
- */
-function ensureApplicationsFolder(): string | null {
-  const applicationsPath = getApplicationsPath();
-  if (!applicationsPath) {
-    return null;
-  }
-
-  if (!fs.existsSync(applicationsPath)) {
-    fs.mkdirSync(applicationsPath, { recursive: true });
-    console.log(`[Applications] Created folder: ${applicationsPath}`);
-  }
-
-  return applicationsPath;
 }
 
 /**
@@ -203,11 +170,10 @@ ${app.generatedResume}
 }
 
 /**
- * Parse an Application from a markdown file
+ * Parse an Application from markdown content
  */
-function parseApplication(filePath: string): Application | null {
+function parseApplicationContent(content: string, fileName: string): Application | null {
   try {
-    const content = fs.readFileSync(filePath, 'utf-8');
     const { frontmatter, body } = parseFrontmatter(content);
 
     if (frontmatter.type !== 'application') {
@@ -219,7 +185,7 @@ function parseApplication(filePath: string): Application | null {
     const resumeMatch = body.match(/## Optimized Resume\n\n([\s\S]*?)$/);
 
     return {
-      id: frontmatter.id || path.basename(filePath, '.md'),
+      id: frontmatter.id || path.basename(fileName, '.md'),
       userId: frontmatter.user_id || undefined,
       jobTitle: frontmatter.job_title || '',
       company: frontmatter.company || '',
@@ -237,93 +203,135 @@ function parseApplication(filePath: string): Application | null {
       }
     };
   } catch (error) {
-    console.error(`[Applications] Error parsing file ${filePath}:`, error);
+    console.error(`[Applications] Error parsing content from ${fileName}:`, error);
     return null;
   }
 }
 
 // ============================================================================
-// Exported API
+// Configuration Options
 // ============================================================================
 
-export const applicationsStore = {
+export interface ApplicationsStoreOptions {
+  /**
+   * Storage provider for persistence
+   * Defaults to FileStorage with user's Documents/ObsidianVault path
+   */
+  storage?: StorageProvider;
+
+  /**
+   * Root path for FileStorage (only used if storage not provided)
+   */
+  storagePath?: string;
+}
+
+// ============================================================================
+// Applications Store Class
+// ============================================================================
+
+/**
+ * ApplicationsStore - Manages job application records with pluggable storage
+ */
+export class ApplicationsStore {
+  private storage: StorageProvider;
+  private readonly folder = APPLICATIONS_FOLDER;
+
+  constructor(options?: ApplicationsStoreOptions) {
+    if (options?.storage) {
+      this.storage = options.storage;
+    } else {
+      const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+      const defaultPath = options?.storagePath || path.join(homeDir, 'Documents', 'ObsidianVault');
+      this.storage = new FileStorage(defaultPath);
+    }
+  }
+
   /**
    * List all applications for a user, optionally filtered by status
    * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
-  list: (userId: string | undefined, statusFilter?: ApplicationStatus): ApplicationSummary[] => {
+  async list(userId: string | undefined, statusFilter?: ApplicationStatus): Promise<ApplicationSummary[]> {
     const effectiveUserId = getEffectiveUserId(userId);
-    const applicationsPath = getApplicationsPath();
-    if (!applicationsPath || !fs.existsSync(applicationsPath)) {
+
+    const exists = await this.storage.exists(this.folder);
+    if (!exists) {
       return [];
     }
 
-    const files = fs.readdirSync(applicationsPath).filter(f => f.endsWith('.md'));
+    const files = await this.storage.list(this.folder);
+    const mdFiles = files.filter(f => f.endsWith('.md'));
     const applications: ApplicationSummary[] = [];
 
-    for (const file of files) {
-      const app = parseApplication(path.join(applicationsPath, file));
-      if (app) {
-        // Filter by ownership - include if no userId set (legacy) or matches
-        const isOwned = !app.userId || app.userId === effectiveUserId;
-        if (isOwned && (!statusFilter || app.status === statusFilter)) {
-          applications.push({
-            id: app.id,
-            userId: app.userId,
-            jobTitle: app.jobTitle,
-            company: app.company,
-            date: app.date,
-            score: app.score,
-            status: app.status
-          });
+    for (const file of mdFiles) {
+      try {
+        const content = await this.storage.read(`${this.folder}/${file}`);
+        const app = parseApplicationContent(content, file);
+        if (app) {
+          const isOwned = !app.userId || app.userId === effectiveUserId;
+          if (isOwned && (!statusFilter || app.status === statusFilter)) {
+            applications.push({
+              id: app.id,
+              userId: app.userId,
+              jobTitle: app.jobTitle,
+              company: app.company,
+              date: app.date,
+              score: app.score,
+              status: app.status
+            });
+          }
         }
+      } catch (error) {
+        console.error(`[Applications] Error reading ${file}:`, error);
       }
     }
 
-    // Sort by date descending (newest first)
     applications.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
     console.log(`[Applications] Listed ${applications.length} applications${statusFilter ? ` (filtered by ${statusFilter})` : ''}`);
     return applications;
-  },
+  }
 
   /**
    * Get a single application by ID
    * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    * Returns null if not found or not owned (same response to prevent enumeration)
    */
-  get: (userId: string | undefined, id: string): Application | null => {
+  async get(userId: string | undefined, id: string): Promise<Application | null> {
     const effectiveUserId = getEffectiveUserId(userId);
-    const applicationsPath = getApplicationsPath();
-    if (!applicationsPath || !fs.existsSync(applicationsPath)) {
+
+    const exists = await this.storage.exists(this.folder);
+    if (!exists) {
       return null;
     }
 
-    const files = fs.readdirSync(applicationsPath).filter(f => f.endsWith('.md'));
+    const files = await this.storage.list(this.folder);
+    const mdFiles = files.filter(f => f.endsWith('.md'));
 
-    for (const file of files) {
-      const filePath = path.join(applicationsPath, file);
-      const app = parseApplication(filePath);
-      if (app && app.id === id) {
-        // Check ownership - return null for non-owned (same as not found)
-        if (app.userId && app.userId !== effectiveUserId) {
-          console.log(`[Applications] Application not found: ${id}`);
-          return null;
+    for (const file of mdFiles) {
+      try {
+        const content = await this.storage.read(`${this.folder}/${file}`);
+        const app = parseApplicationContent(content, file);
+        if (app && app.id === id) {
+          if (app.userId && app.userId !== effectiveUserId) {
+            console.log(`[Applications] Application not found: ${id}`);
+            return null;
+          }
+          console.log(`[Applications] Found application: ${id}`);
+          return app;
         }
-        console.log(`[Applications] Found application: ${id}`);
-        return app;
+      } catch (error) {
+        console.error(`[Applications] Error reading ${file}:`, error);
       }
     }
 
     console.log(`[Applications] Application not found: ${id}`);
     return null;
-  },
+  }
 
   /**
    * Save a new application
    * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
-  save: (userId: string | undefined, data: {
+  async save(userId: string | undefined, data: {
     jobTitle: string;
     company: string;
     jobDescription: string;
@@ -334,13 +342,8 @@ export const applicationsStore = {
       iterations: number;
       initialScore: number;
     };
-  }): Application | null => {
+  }): Promise<Application | null> {
     const effectiveUserId = getEffectiveUserId(userId);
-    const applicationsPath = ensureApplicationsFolder();
-    if (!applicationsPath) {
-      console.error('[Applications] Cannot save: vault path not configured');
-      return null;
-    }
 
     const id = `app-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
     const now = new Date().toISOString();
@@ -350,7 +353,7 @@ export const applicationsStore = {
       userId: effectiveUserId,
       jobTitle: data.jobTitle,
       company: data.company,
-      date: now.split('T')[0], // YYYY-MM-DD
+      date: now.split('T')[0],
       jobDescription: data.jobDescription,
       generatedResume: data.generatedResume,
       score: data.score,
@@ -364,128 +367,141 @@ export const applicationsStore = {
     };
 
     const filename = generateFilename(id, data.jobTitle, data.company);
-    const filePath = path.join(applicationsPath, filename);
+    const filePath = `${this.folder}/${filename}`;
     const markdown = generateMarkdown(application);
 
-    fs.writeFileSync(filePath, markdown, 'utf-8');
+    await this.storage.write(filePath, markdown);
     console.log(`[Applications] Saved application: ${id} to ${filename}`);
 
     return application;
-  },
+  }
 
   /**
    * Update an existing application (status, notes)
    * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    * Returns null if not found or not owned
    */
-  update: (userId: string | undefined, id: string, updates: {
+  async update(userId: string | undefined, id: string, updates: {
     status?: ApplicationStatus;
     notes?: string;
-  }): Application | null => {
+  }): Promise<Application | null> {
     const effectiveUserId = getEffectiveUserId(userId);
-    const applicationsPath = getApplicationsPath();
-    if (!applicationsPath || !fs.existsSync(applicationsPath)) {
+
+    const exists = await this.storage.exists(this.folder);
+    if (!exists) {
       return null;
     }
 
-    const files = fs.readdirSync(applicationsPath).filter(f => f.endsWith('.md'));
+    const files = await this.storage.list(this.folder);
+    const mdFiles = files.filter(f => f.endsWith('.md'));
 
-    for (const file of files) {
-      const filePath = path.join(applicationsPath, file);
-      const app = parseApplication(filePath);
+    for (const file of mdFiles) {
+      try {
+        const filePath = `${this.folder}/${file}`;
+        const content = await this.storage.read(filePath);
+        const app = parseApplicationContent(content, file);
 
-      if (app && app.id === id) {
-        // Check ownership
-        if (app.userId && app.userId !== effectiveUserId) {
-          console.log(`[Applications] Application not found for update: ${id}`);
-          return null;
+        if (app && app.id === id) {
+          if (app.userId && app.userId !== effectiveUserId) {
+            console.log(`[Applications] Application not found for update: ${id}`);
+            return null;
+          }
+
+          if (updates.status !== undefined) {
+            app.status = updates.status;
+          }
+          if (updates.notes !== undefined) {
+            app.notes = updates.notes;
+          }
+
+          const markdown = generateMarkdown(app);
+          await this.storage.write(filePath, markdown);
+          console.log(`[Applications] Updated application: ${id}`);
+
+          return app;
         }
-
-        // Apply updates
-        if (updates.status !== undefined) {
-          app.status = updates.status;
-        }
-        if (updates.notes !== undefined) {
-          app.notes = updates.notes;
-        }
-
-        // Write back
-        const markdown = generateMarkdown(app);
-        fs.writeFileSync(filePath, markdown, 'utf-8');
-        console.log(`[Applications] Updated application: ${id}`);
-
-        return app;
+      } catch (error) {
+        console.error(`[Applications] Error processing ${file}:`, error);
       }
     }
 
     console.log(`[Applications] Application not found for update: ${id}`);
     return null;
-  },
+  }
 
   /**
    * Delete an application
    * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    * Returns false if not found or not owned
    */
-  delete: (userId: string | undefined, id: string): boolean => {
+  async delete(userId: string | undefined, id: string): Promise<boolean> {
     const effectiveUserId = getEffectiveUserId(userId);
-    const applicationsPath = getApplicationsPath();
-    if (!applicationsPath || !fs.existsSync(applicationsPath)) {
+
+    const exists = await this.storage.exists(this.folder);
+    if (!exists) {
       return false;
     }
 
-    const files = fs.readdirSync(applicationsPath).filter(f => f.endsWith('.md'));
+    const files = await this.storage.list(this.folder);
+    const mdFiles = files.filter(f => f.endsWith('.md'));
 
-    for (const file of files) {
-      const filePath = path.join(applicationsPath, file);
-      const app = parseApplication(filePath);
+    for (const file of mdFiles) {
+      try {
+        const filePath = `${this.folder}/${file}`;
+        const content = await this.storage.read(filePath);
+        const app = parseApplicationContent(content, file);
 
-      if (app && app.id === id) {
-        // Check ownership
-        if (app.userId && app.userId !== effectiveUserId) {
-          console.log(`[Applications] Application not found for deletion: ${id}`);
-          return false;
+        if (app && app.id === id) {
+          if (app.userId && app.userId !== effectiveUserId) {
+            console.log(`[Applications] Application not found for deletion: ${id}`);
+            return false;
+          }
+
+          await this.storage.delete(filePath);
+          console.log(`[Applications] Deleted application: ${id}`);
+          return true;
         }
-
-        fs.unlinkSync(filePath);
-        console.log(`[Applications] Deleted application: ${id}`);
-        return true;
+      } catch (error) {
+        console.error(`[Applications] Error processing ${file}:`, error);
       }
     }
 
     console.log(`[Applications] Application not found for deletion: ${id}`);
     return false;
-  },
+  }
 
   /**
    * Get statistics about applications for a user
    * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
-  getStats: (userId: string | undefined): {
+  async getStats(userId: string | undefined): Promise<{
     total: number;
     byStatus: Record<ApplicationStatus, number>;
     averageScore: number;
-    recentCount: number; // Last 7 days
-  } => {
+    recentCount: number;
+  }> {
     const effectiveUserId = getEffectiveUserId(userId);
-    const applicationsPath = getApplicationsPath();
-    if (!applicationsPath || !fs.existsSync(applicationsPath)) {
-      return {
-        total: 0,
-        byStatus: {
-          saved: 0,
-          applied: 0,
-          interviewing: 0,
-          offered: 0,
-          rejected: 0,
-          withdrawn: 0
-        },
-        averageScore: 0,
-        recentCount: 0
-      };
+    const emptyStats = {
+      total: 0,
+      byStatus: {
+        saved: 0,
+        applied: 0,
+        interviewing: 0,
+        offered: 0,
+        rejected: 0,
+        withdrawn: 0
+      } as Record<ApplicationStatus, number>,
+      averageScore: 0,
+      recentCount: 0
+    };
+
+    const exists = await this.storage.exists(this.folder);
+    if (!exists) {
+      return emptyStats;
     }
 
-    const files = fs.readdirSync(applicationsPath).filter(f => f.endsWith('.md'));
+    const files = await this.storage.list(this.folder);
+    const mdFiles = files.filter(f => f.endsWith('.md'));
     const byStatus: Record<ApplicationStatus, number> = {
       saved: 0,
       applied: 0,
@@ -501,20 +517,24 @@ export const applicationsStore = {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    for (const file of files) {
-      const app = parseApplication(path.join(applicationsPath, file));
-      if (app) {
-        // Filter by ownership - include if no userId set (legacy) or matches
-        const isOwned = !app.userId || app.userId === effectiveUserId;
-        if (!isOwned) continue;
+    for (const file of mdFiles) {
+      try {
+        const content = await this.storage.read(`${this.folder}/${file}`);
+        const app = parseApplicationContent(content, file);
+        if (app) {
+          const isOwned = !app.userId || app.userId === effectiveUserId;
+          if (!isOwned) continue;
 
-        validCount++;
-        byStatus[app.status]++;
-        totalScore += app.score;
+          validCount++;
+          byStatus[app.status]++;
+          totalScore += app.score;
 
-        if (new Date(app.date) >= sevenDaysAgo) {
-          recentCount++;
+          if (new Date(app.date) >= sevenDaysAgo) {
+            recentCount++;
+          }
         }
+      } catch (error) {
+        console.error(`[Applications] Error reading ${file}:`, error);
       }
     }
 
@@ -525,4 +545,7 @@ export const applicationsStore = {
       recentCount
     };
   }
-};
+}
+
+// Export singleton instance for backward compatibility
+export const applicationsStore = new ApplicationsStore();

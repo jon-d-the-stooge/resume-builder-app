@@ -26,9 +26,9 @@ import {
   isExperienceMetadata,
   isEducationMetadata
 } from '../types/vault';
-import { obsidianClient } from './obsidianClient';
-import { Frontmatter } from '../types';
+import { StorageProvider, FileStorage } from '../shared/storage';
 import { ResumeParser, ParseResult } from './resumeParser';
+import * as path from 'path';
 
 // ============================================================================
 // Types
@@ -50,8 +50,28 @@ function getEffectiveUserId(userId: string | undefined): string {
  * Options for vault operations
  */
 interface VaultOperationOptions {
-  persistToObsidian?: boolean; // Default true
-  updateTimestamp?: boolean; // Default true
+  /** @deprecated Use persistToStorage instead */
+  persistToObsidian?: boolean;
+  /** Whether to persist changes to storage (default: true) */
+  persistToStorage?: boolean;
+  /** Whether to update the timestamp (default: true) */
+  updateTimestamp?: boolean;
+}
+
+/**
+ * Check if persistence is enabled (supports both old and new option names)
+ */
+function shouldPersist(options?: VaultOperationOptions): boolean {
+  // New option takes precedence
+  if (options?.persistToStorage !== undefined) {
+    return options.persistToStorage;
+  }
+  // Fall back to deprecated option
+  if (options?.persistToObsidian !== undefined) {
+    return options.persistToObsidian;
+  }
+  // Default to true
+  return true;
 }
 
 /**
@@ -78,10 +98,27 @@ export interface ObjectContext {
 // ============================================================================
 
 /**
+ * Configuration options for VaultManager
+ */
+export interface VaultManagerOptions {
+  /**
+   * Storage provider for persistence
+   * Defaults to FileStorage with user's Documents/ObsidianVault path
+   */
+  storage?: StorageProvider;
+
+  /**
+   * Root path for FileStorage (only used if storage not provided)
+   * Defaults to ~/Documents/ObsidianVault
+   */
+  storagePath?: string;
+}
+
+/**
  * VaultManager - CRUD operations for hierarchical vault structure
  *
  * Manages vaults, sections, objects, and items with:
- * - Persistence to Obsidian vault as JSON
+ * - Persistence via pluggable StorageProvider (default: FileStorage)
  * - Context-aware retrieval (items include parent context)
  * - Query capabilities by section type, tags, dates
  */
@@ -92,8 +129,23 @@ export class VaultManager {
   // Parser for importing resumes
   private parser: ResumeParser;
 
-  constructor() {
+  // Storage provider for persistence
+  private storage: StorageProvider;
+
+  // Directory for vault files
+  private readonly vaultDirectory = 'resume-vaults';
+
+  constructor(options?: VaultManagerOptions) {
     this.parser = new ResumeParser();
+
+    // Use provided storage or create default FileStorage
+    if (options?.storage) {
+      this.storage = options.storage;
+    } else {
+      const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+      const defaultPath = options?.storagePath || path.join(homeDir, 'Documents', 'ObsidianVault');
+      this.storage = new FileStorage(defaultPath);
+    }
   }
 
   // ============================================================================
@@ -128,12 +180,12 @@ export class VaultManager {
     // Add sections if provided (don't push - addSection already does)
     if (input.sections) {
       for (const sectionInput of input.sections) {
-        await this.addSection(userId, vault.id, sectionInput, { persistToObsidian: false });
+        await this.addSection(userId, vault.id, sectionInput, { persistToStorage: false });
       }
     }
 
     // Persist to Obsidian
-    if (options?.persistToObsidian !== false) {
+    if (shouldPersist(options)) {
       await this.persistVault(vault);
     }
 
@@ -153,7 +205,7 @@ export class VaultManager {
 
     // Try loading from Obsidian if not in memory
     if (!vault) {
-      vault = await this.loadVaultFromObsidian(vaultId);
+      vault = await this.loadVaultFromStorage(vaultId);
       if (vault) {
         this.vaults.set(vaultId, vault);
       }
@@ -175,7 +227,7 @@ export class VaultManager {
     const effectiveUserId = getEffectiveUserId(userId);
 
     // Load all vaults from Obsidian
-    await this.loadAllVaultsFromObsidian();
+    await this.loadAllVaultsFromStorage();
 
     // Filter by ownership
     return Array.from(this.vaults.values()).filter(
@@ -206,7 +258,7 @@ export class VaultManager {
 
     this.vaults.set(vaultId, vault);
 
-    if (options?.persistToObsidian !== false) {
+    if (shouldPersist(options)) {
       await this.persistVault(vault);
     }
 
@@ -227,7 +279,7 @@ export class VaultManager {
     this.vaults.delete(vaultId);
 
     // Remove from Obsidian
-    await this.deleteVaultFromObsidian(vaultId);
+    await this.deleteVaultFromStorage(vaultId);
   }
 
   // ============================================================================
@@ -273,7 +325,7 @@ export class VaultManager {
       vault.metadata.updatedAt = new Date().toISOString();
     }
 
-    if (options?.persistToObsidian !== false) {
+    if (shouldPersist(options)) {
       await this.persistVault(vault);
     }
 
@@ -332,7 +384,7 @@ export class VaultManager {
       vault.metadata.updatedAt = new Date().toISOString();
     }
 
-    if (options?.persistToObsidian !== false) {
+    if (shouldPersist(options)) {
       await this.persistVault(vault);
     }
 
@@ -365,7 +417,7 @@ export class VaultManager {
       vault.metadata.updatedAt = new Date().toISOString();
     }
 
-    if (options?.persistToObsidian !== false) {
+    if (shouldPersist(options)) {
       await this.persistVault(vault);
     }
   }
@@ -402,7 +454,7 @@ export class VaultManager {
       vault.metadata.updatedAt = new Date().toISOString();
     }
 
-    if (options?.persistToObsidian !== false) {
+    if (shouldPersist(options)) {
       await this.persistVault(vault);
     }
 
@@ -458,7 +510,7 @@ export class VaultManager {
           vault.metadata.updatedAt = new Date().toISOString();
         }
 
-        if (options?.persistToObsidian !== false) {
+        if (shouldPersist(options)) {
           await this.persistVault(vault);
         }
 
@@ -493,7 +545,7 @@ export class VaultManager {
           vault.metadata.updatedAt = new Date().toISOString();
         }
 
-        if (options?.persistToObsidian !== false) {
+        if (shouldPersist(options)) {
           await this.persistVault(vault);
         }
 
@@ -543,7 +595,7 @@ export class VaultManager {
           vault.metadata.updatedAt = new Date().toISOString();
         }
 
-        if (options?.persistToObsidian !== false) {
+        if (shouldPersist(options)) {
           await this.persistVault(vault);
         }
 
@@ -603,7 +655,7 @@ export class VaultManager {
             vault.metadata.updatedAt = new Date().toISOString();
           }
 
-          if (options?.persistToObsidian !== false) {
+          if (shouldPersist(options)) {
             await this.persistVault(vault);
           }
 
@@ -640,7 +692,7 @@ export class VaultManager {
             vault.metadata.updatedAt = new Date().toISOString();
           }
 
-          if (options?.persistToObsidian !== false) {
+          if (shouldPersist(options)) {
             await this.persistVault(vault);
           }
 
@@ -779,40 +831,27 @@ export class VaultManager {
   // ============================================================================
 
   /**
-   * Persist vault to Obsidian as JSON
+   * Persist vault to storage as JSON
    */
   private async persistVault(vault: Vault): Promise<void> {
-    const filePath = `resume-vaults/${vault.id}.json`;
+    const filePath = `${this.vaultDirectory}/${vault.id}.json`;
     const content = JSON.stringify(vault, null, 2);
-
-    const frontmatter: Frontmatter = {
-      tags: ['vault', 'resume'],
-      type: 'job-entry' as any, // Using existing type for compatibility
-      createdAt: vault.metadata.createdAt,
-      updatedAt: vault.metadata.updatedAt,
-      metadata: {
-        customFields: {
-          vaultVersion: vault.version,
-          profileName: `${vault.profile.firstName} ${vault.profile.lastName}`.trim()
-        }
-      }
-    };
-
-    await obsidianClient.writeNote(filePath, content, frontmatter);
+    await this.storage.write(filePath, content);
   }
 
   /**
-   * Load a vault from Obsidian
+   * Load a vault from storage
    */
-  private async loadVaultFromObsidian(vaultId: string): Promise<Vault | null> {
+  private async loadVaultFromStorage(vaultId: string): Promise<Vault | null> {
     try {
-      const filePath = `resume-vaults/${vaultId}.json`;
-      const noteContent = await obsidianClient.readNote(filePath);
+      const filePath = `${this.vaultDirectory}/${vaultId}.json`;
+      const exists = await this.storage.exists(filePath);
+      if (!exists) return null;
 
-      if (!noteContent) return null;
+      const content = await this.storage.read(filePath);
 
-      // Extract JSON content from markdown
-      const jsonContent = this.extractJsonFromMarkdown(noteContent.content);
+      // Handle backward compatibility: extract JSON from markdown if frontmatter present
+      const jsonContent = this.extractJsonFromMarkdown(content);
       return JSON.parse(jsonContent);
     } catch (error) {
       console.error(`Failed to load vault ${vaultId}:`, error);
@@ -821,66 +860,59 @@ export class VaultManager {
   }
 
   /**
-   * Load all vaults from Obsidian
+   * Load all vaults from storage
    */
-  private async loadAllVaultsFromObsidian(): Promise<void> {
+  private async loadAllVaultsFromStorage(): Promise<void> {
     try {
-      // First try the tag-based search (works if index is populated)
-      const results = await obsidianClient.searchNotes({
-        tags: ['vault', 'resume']
-      });
+      // Check if vault directory exists
+      const dirExists = await this.storage.exists(this.vaultDirectory);
+      if (!dirExists) {
+        console.log(`Vault directory ${this.vaultDirectory} does not exist yet`);
+        return;
+      }
 
-      if (results.length > 0) {
-        for (const result of results) {
-          try {
-            const jsonContent = this.extractJsonFromMarkdown(result.content);
-            const vault: Vault = JSON.parse(jsonContent);
-            this.vaults.set(vault.id, vault);
-          } catch (error) {
-            console.error(`Failed to parse vault from ${result.path}:`, error);
-          }
-        }
-      } else {
-        // Fallback: directly list and read vault files from resume-vaults directory
-        // This handles cold start when the in-memory index is empty
-        console.log('Tag index empty, scanning resume-vaults directory directly...');
-        const vaultFiles = await obsidianClient.listDirectory('resume-vaults');
+      // List all files in the vault directory
+      const files = await this.storage.list(this.vaultDirectory);
 
-        for (const filePath of vaultFiles) {
-          try {
-            const noteContent = await obsidianClient.readNote(filePath);
-            const jsonContent = this.extractJsonFromMarkdown(noteContent.content);
-            const vault: Vault = JSON.parse(jsonContent);
-            this.vaults.set(vault.id, vault);
-            console.log(`Loaded vault: ${vault.id}`);
-          } catch (error) {
-            console.error(`Failed to parse vault from ${filePath}:`, error);
-          }
+      for (const fileName of files) {
+        // Only process .json files
+        if (!fileName.endsWith('.json')) continue;
+
+        const filePath = `${this.vaultDirectory}/${fileName}`;
+        try {
+          const content = await this.storage.read(filePath);
+          const jsonContent = this.extractJsonFromMarkdown(content);
+          const vault: Vault = JSON.parse(jsonContent);
+          this.vaults.set(vault.id, vault);
+          console.log(`Loaded vault: ${vault.id}`);
+        } catch (error) {
+          console.error(`Failed to parse vault from ${filePath}:`, error);
         }
       }
     } catch (error) {
-      console.error('Failed to load vaults from Obsidian:', error);
+      console.error('Failed to load vaults from storage:', error);
     }
   }
 
   /**
-   * Delete vault from Obsidian
+   * Delete vault from storage
    */
-  private async deleteVaultFromObsidian(vaultId: string): Promise<void> {
+  private async deleteVaultFromStorage(vaultId: string): Promise<void> {
     try {
-      const filePath = `resume-vaults/${vaultId}.json`;
-      await obsidianClient.deleteNote(filePath);
+      const filePath = `${this.vaultDirectory}/${vaultId}.json`;
+      await this.storage.delete(filePath);
     } catch (error) {
-      console.error(`Failed to delete vault ${vaultId} from Obsidian:`, error);
+      console.error(`Failed to delete vault ${vaultId}:`, error);
     }
   }
 
   /**
-   * Extract JSON content from markdown (handles frontmatter)
+   * Extract JSON content from markdown (handles legacy frontmatter format)
+   * Provides backward compatibility with files stored via obsidianClient
    */
-  private extractJsonFromMarkdown(markdown: string): string {
-    // Remove frontmatter if present
-    const withoutFrontmatter = markdown.replace(/^---\n[\s\S]*?\n---\n\n?/, '');
+  private extractJsonFromMarkdown(content: string): string {
+    // Remove frontmatter if present (legacy format)
+    const withoutFrontmatter = content.replace(/^---\n[\s\S]*?\n---\n\n?/, '');
     return withoutFrontmatter.trim();
   }
 

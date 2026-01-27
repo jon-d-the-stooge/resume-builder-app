@@ -1,7 +1,7 @@
 /**
  * Knowledge Base Store Module
  *
- * Stores optimized resumes and their analysis data in the vault's KnowledgeBase/ folder.
+ * Stores optimized resumes and their analysis data in the KnowledgeBase/ folder.
  * Automatically archives every successful optimization for later retrieval, editing, and export.
  *
  * Each entry is stored as a markdown file with YAML frontmatter containing:
@@ -11,9 +11,8 @@
  * - User notes and tags
  */
 
-import * as fs from 'fs';
 import * as path from 'path';
-import { obsidianClient } from './obsidianClient';
+import { StorageProvider, FileStorage } from '../shared/storage';
 
 // ============================================================================
 // Type Definitions
@@ -238,34 +237,6 @@ function generateFilename(entry: { id: string; company: string; jobTitle: string
   const safeCompany = sanitize(entry.company).substring(0, 30) || 'Unknown';
   const safeTitle = sanitize(entry.jobTitle).substring(0, 40) || 'Job';
   return `${safeCompany}-${safeTitle}-${entry.id}.md`;
-}
-
-/**
- * Get the path to the KnowledgeBase folder in the vault
- */
-function getKnowledgeBasePath(): string | null {
-  const vaultPath = obsidianClient.getVaultRootPath();
-  if (!vaultPath) {
-    return null;
-  }
-  return path.join(vaultPath, KNOWLEDGE_BASE_FOLDER);
-}
-
-/**
- * Ensure the KnowledgeBase folder exists
- */
-function ensureKnowledgeBaseFolder(): string | null {
-  const kbPath = getKnowledgeBasePath();
-  if (!kbPath) {
-    return null;
-  }
-
-  if (!fs.existsSync(kbPath)) {
-    fs.mkdirSync(kbPath, { recursive: true });
-    console.log(`[KnowledgeBase] Created folder: ${kbPath}`);
-  }
-
-  return kbPath;
 }
 
 /**
@@ -504,11 +475,10 @@ function parseYamlValue(value: string): any {
 }
 
 /**
- * Parse a KnowledgeBaseEntry from a markdown file
+ * Parse a KnowledgeBaseEntry from markdown content
  */
-function parseEntry(filePath: string): KnowledgeBaseEntry | null {
+function parseEntryContent(content: string, fileName: string): KnowledgeBaseEntry | null {
   try {
-    const content = fs.readFileSync(filePath, 'utf-8');
     const { frontmatter, body } = parseFrontmatter(content);
 
     if (frontmatter.type !== 'knowledge-base-entry') {
@@ -521,7 +491,7 @@ function parseEntry(filePath: string): KnowledgeBaseEntry | null {
 
     // Build base entry
     const entry: KnowledgeBaseEntry = {
-      id: frontmatter.id || path.basename(filePath, '.md'),
+      id: frontmatter.id || path.basename(fileName, '.md'),
       userId: frontmatter.user_id || undefined,
       jobTitle: frontmatter.job_title || '',
       company: frontmatter.company || '',
@@ -564,91 +534,110 @@ function parseEntry(filePath: string): KnowledgeBaseEntry | null {
 
     return entry;
   } catch (error) {
-    console.error(`[KnowledgeBase] Error parsing file ${filePath}:`, error);
+    console.error(`[KnowledgeBase] Error parsing content from ${fileName}:`, error);
     return null;
   }
 }
 
 // ============================================================================
-// Exported API
+// Configuration Options
 // ============================================================================
 
-export const knowledgeBaseStore = {
+export interface KnowledgeBaseStoreOptions {
+  /**
+   * Storage provider for persistence
+   * Defaults to FileStorage with user's Documents/ObsidianVault path
+   */
+  storage?: StorageProvider;
+
+  /**
+   * Root path for FileStorage (only used if storage not provided)
+   */
+  storagePath?: string;
+}
+
+// ============================================================================
+// Knowledge Base Store Class
+// ============================================================================
+
+/**
+ * KnowledgeBaseStore - Manages optimized resume records with pluggable storage
+ */
+export class KnowledgeBaseStore {
+  private storage: StorageProvider;
+  private readonly folder = KNOWLEDGE_BASE_FOLDER;
+
+  constructor(options?: KnowledgeBaseStoreOptions) {
+    if (options?.storage) {
+      this.storage = options.storage;
+    } else {
+      const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+      const defaultPath = options?.storagePath || path.join(homeDir, 'Documents', 'ObsidianVault');
+      this.storage = new FileStorage(defaultPath);
+    }
+  }
+
   /**
    * List all knowledge base entries for a user with optional filtering and sorting
-   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
-  list: (userId: string | undefined, filters?: KnowledgeBaseFilters): KnowledgeBaseSummary[] => {
+  async list(userId: string | undefined, filters?: KnowledgeBaseFilters): Promise<KnowledgeBaseSummary[]> {
     const effectiveUserId = getEffectiveUserId(userId);
-    const kbPath = getKnowledgeBasePath();
-    if (!kbPath || !fs.existsSync(kbPath)) {
+
+    const exists = await this.storage.exists(this.folder);
+    if (!exists) {
       return [];
     }
 
-    const files = fs.readdirSync(kbPath).filter(f => f.endsWith('.md'));
+    const files = await this.storage.list(this.folder);
+    const mdFiles = files.filter(f => f.endsWith('.md'));
     let entries: KnowledgeBaseSummary[] = [];
 
-    for (const file of files) {
-      const entry = parseEntry(path.join(kbPath, file));
-      if (entry) {
-        // Filter by ownership - include if no userId set (legacy) or matches
-        const isOwned = !entry.userId || entry.userId === effectiveUserId;
-        if (!isOwned) {
-          continue;
-        }
+    for (const file of mdFiles) {
+      try {
+        const content = await this.storage.read(`${this.folder}/${file}`);
+        const entry = parseEntryContent(content, file);
+        if (entry) {
+          const isOwned = !entry.userId || entry.userId === effectiveUserId;
+          if (!isOwned) continue;
 
-        // Apply company filter
-        if (filters?.company && entry.company !== filters.company) {
-          continue;
-        }
+          if (filters?.company && entry.company !== filters.company) continue;
+          if (filters?.jobTitle && entry.jobTitle !== filters.jobTitle) continue;
 
-        // Apply job title filter
-        if (filters?.jobTitle && entry.jobTitle !== filters.jobTitle) {
-          continue;
-        }
-
-        // Apply date range filter
-        if (filters?.dateStart || filters?.dateEnd) {
-          const entryDate = new Date(entry.createdAt);
-          if (filters.dateStart && entryDate < new Date(filters.dateStart)) {
-            continue;
-          }
-          if (filters.dateEnd) {
-            const endDate = new Date(filters.dateEnd);
-            endDate.setHours(23, 59, 59, 999); // Include entire end day
-            if (entryDate > endDate) {
-              continue;
+          if (filters?.dateStart || filters?.dateEnd) {
+            const entryDate = new Date(entry.createdAt);
+            if (filters.dateStart && entryDate < new Date(filters.dateStart)) continue;
+            if (filters.dateEnd) {
+              const endDate = new Date(filters.dateEnd);
+              endDate.setHours(23, 59, 59, 999);
+              if (entryDate > endDate) continue;
             }
           }
-        }
 
-        // Apply text search filter
-        if (filters?.text) {
-          const searchText = filters.text.toLowerCase();
-          const matchesText =
-            entry.jobTitle.toLowerCase().includes(searchText) ||
-            entry.company.toLowerCase().includes(searchText) ||
-            entry.jobDescription.toLowerCase().includes(searchText) ||
-            (entry.tags && entry.tags.some(t => t.toLowerCase().includes(searchText)));
-
-          if (!matchesText) {
-            continue;
+          if (filters?.text) {
+            const searchText = filters.text.toLowerCase();
+            const matchesText =
+              entry.jobTitle.toLowerCase().includes(searchText) ||
+              entry.company.toLowerCase().includes(searchText) ||
+              entry.jobDescription.toLowerCase().includes(searchText) ||
+              (entry.tags && entry.tags.some(t => t.toLowerCase().includes(searchText)));
+            if (!matchesText) continue;
           }
-        }
 
-        entries.push({
-          id: entry.id,
-          userId: entry.userId,
-          jobTitle: entry.jobTitle,
-          company: entry.company,
-          score: entry.analysis.finalScore,
-          createdAt: entry.createdAt,
-          tags: entry.tags
-        });
+          entries.push({
+            id: entry.id,
+            userId: entry.userId,
+            jobTitle: entry.jobTitle,
+            company: entry.company,
+            score: entry.analysis.finalScore,
+            createdAt: entry.createdAt,
+            tags: entry.tags
+          });
+        }
+      } catch (error) {
+        console.error(`[KnowledgeBase] Error reading ${file}:`, error);
       }
     }
 
-    // Sort
     const sortBy = filters?.sortBy || 'date';
     const sortOrder = filters?.sortOrder || 'desc';
     const multiplier = sortOrder === 'asc' ? 1 : -1;
@@ -666,52 +655,50 @@ export const knowledgeBaseStore = {
 
     console.log(`[KnowledgeBase] Listed ${entries.length} entries`);
     return entries;
-  },
+  }
 
   /**
    * Get a single entry by ID
-   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
-   * Returns null if not found or not owned (same response to prevent enumeration)
    */
-  get: (userId: string | undefined, id: string): KnowledgeBaseEntry | null => {
+  async get(userId: string | undefined, id: string): Promise<KnowledgeBaseEntry | null> {
     const effectiveUserId = getEffectiveUserId(userId);
-    const kbPath = getKnowledgeBasePath();
-    if (!kbPath || !fs.existsSync(kbPath)) {
+
+    const exists = await this.storage.exists(this.folder);
+    if (!exists) {
       return null;
     }
 
-    const files = fs.readdirSync(kbPath).filter(f => f.endsWith('.md'));
+    const files = await this.storage.list(this.folder);
+    const mdFiles = files.filter(f => f.endsWith('.md'));
 
-    for (const file of files) {
+    for (const file of mdFiles) {
       if (file.includes(id)) {
-        const entry = parseEntry(path.join(kbPath, file));
-        if (entry && entry.id === id) {
-          // Check ownership - return null for non-owned (same as not found)
-          if (entry.userId && entry.userId !== effectiveUserId) {
-            console.log(`[KnowledgeBase] Entry not found: ${id}`);
-            return null;
+        try {
+          const content = await this.storage.read(`${this.folder}/${file}`);
+          const entry = parseEntryContent(content, file);
+          if (entry && entry.id === id) {
+            if (entry.userId && entry.userId !== effectiveUserId) {
+              console.log(`[KnowledgeBase] Entry not found: ${id}`);
+              return null;
+            }
+            console.log(`[KnowledgeBase] Found entry: ${id}`);
+            return entry;
           }
-          console.log(`[KnowledgeBase] Found entry: ${id}`);
-          return entry;
+        } catch (error) {
+          console.error(`[KnowledgeBase] Error reading ${file}:`, error);
         }
       }
     }
 
     console.log(`[KnowledgeBase] Entry not found: ${id}`);
     return null;
-  },
+  }
 
   /**
    * Save a new knowledge base entry
-   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
-  save: (userId: string | undefined, data: Omit<KnowledgeBaseEntry, 'id' | 'createdAt' | 'userId'>): KnowledgeBaseEntry | null => {
+  async save(userId: string | undefined, data: Omit<KnowledgeBaseEntry, 'id' | 'createdAt' | 'userId'>): Promise<KnowledgeBaseEntry | null> {
     const effectiveUserId = getEffectiveUserId(userId);
-    const kbPath = ensureKnowledgeBaseFolder();
-    if (!kbPath) {
-      console.error('[KnowledgeBase] Cannot save: vault path not configured');
-      return null;
-    }
 
     const id = generateId();
     const now = new Date().toISOString();
@@ -728,7 +715,6 @@ export const knowledgeBaseStore = {
       createdAt: now,
       notes: data.notes,
       tags: data.tags,
-      // Enhanced fields (Option A) - pass through if provided
       parsedRequirements: data.parsedRequirements,
       decisions: data.decisions,
       committeeOutput: data.committeeOutput,
@@ -736,124 +722,126 @@ export const knowledgeBaseStore = {
     };
 
     const filename = generateFilename(entry);
-    const filePath = path.join(kbPath, filename);
+    const filePath = `${this.folder}/${filename}`;
     const markdown = generateMarkdown(entry);
 
-    fs.writeFileSync(filePath, markdown, 'utf-8');
+    await this.storage.write(filePath, markdown);
     console.log(`[KnowledgeBase] Saved entry: ${id} to ${filename}`);
 
     return entry;
-  },
+  }
 
   /**
    * Update an existing entry (notes, tags, or resume content)
-   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
-   * Returns null if not found or not owned
    */
-  update: (userId: string | undefined, id: string, updates: {
+  async update(userId: string | undefined, id: string, updates: {
     notes?: string;
     tags?: string[];
     optimizedResume?: string;
-  }): KnowledgeBaseEntry | null => {
+  }): Promise<KnowledgeBaseEntry | null> {
     const effectiveUserId = getEffectiveUserId(userId);
-    const kbPath = getKnowledgeBasePath();
-    if (!kbPath || !fs.existsSync(kbPath)) {
+
+    const exists = await this.storage.exists(this.folder);
+    if (!exists) {
       return null;
     }
 
-    const files = fs.readdirSync(kbPath).filter(f => f.endsWith('.md'));
+    const files = await this.storage.list(this.folder);
+    const mdFiles = files.filter(f => f.endsWith('.md'));
 
-    for (const file of files) {
+    for (const file of mdFiles) {
       if (file.includes(id)) {
-        const filePath = path.join(kbPath, file);
-        const entry = parseEntry(filePath);
+        try {
+          const filePath = `${this.folder}/${file}`;
+          const content = await this.storage.read(filePath);
+          const entry = parseEntryContent(content, file);
 
-        if (entry && entry.id === id) {
-          // Check ownership
-          if (entry.userId && entry.userId !== effectiveUserId) {
-            console.log(`[KnowledgeBase] Entry not found for update: ${id}`);
-            return null;
-          }
+          if (entry && entry.id === id) {
+            if (entry.userId && entry.userId !== effectiveUserId) {
+              console.log(`[KnowledgeBase] Entry not found for update: ${id}`);
+              return null;
+            }
 
-          // Apply updates
-          if (updates.notes !== undefined) {
-            entry.notes = updates.notes;
-          }
-          if (updates.tags !== undefined) {
-            entry.tags = updates.tags;
-          }
-          if (updates.optimizedResume !== undefined) {
-            entry.optimizedResume = updates.optimizedResume;
-          }
+            if (updates.notes !== undefined) entry.notes = updates.notes;
+            if (updates.tags !== undefined) entry.tags = updates.tags;
+            if (updates.optimizedResume !== undefined) entry.optimizedResume = updates.optimizedResume;
 
-          // Write back
-          const markdown = generateMarkdown(entry);
-          fs.writeFileSync(filePath, markdown, 'utf-8');
-          console.log(`[KnowledgeBase] Updated entry: ${id}`);
+            const markdown = generateMarkdown(entry);
+            await this.storage.write(filePath, markdown);
+            console.log(`[KnowledgeBase] Updated entry: ${id}`);
 
-          return entry;
+            return entry;
+          }
+        } catch (error) {
+          console.error(`[KnowledgeBase] Error processing ${file}:`, error);
         }
       }
     }
 
     console.log(`[KnowledgeBase] Entry not found for update: ${id}`);
     return null;
-  },
+  }
 
   /**
    * Delete an entry
-   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
-   * Returns false if not found or not owned
    */
-  delete: (userId: string | undefined, id: string): boolean => {
+  async delete(userId: string | undefined, id: string): Promise<boolean> {
     const effectiveUserId = getEffectiveUserId(userId);
-    const kbPath = getKnowledgeBasePath();
-    if (!kbPath || !fs.existsSync(kbPath)) {
+
+    const exists = await this.storage.exists(this.folder);
+    if (!exists) {
       return false;
     }
 
-    const files = fs.readdirSync(kbPath).filter(f => f.endsWith('.md'));
+    const files = await this.storage.list(this.folder);
+    const mdFiles = files.filter(f => f.endsWith('.md'));
 
-    for (const file of files) {
+    for (const file of mdFiles) {
       if (file.includes(id)) {
-        const filePath = path.join(kbPath, file);
-        const entry = parseEntry(filePath);
+        try {
+          const filePath = `${this.folder}/${file}`;
+          const content = await this.storage.read(filePath);
+          const entry = parseEntryContent(content, file);
 
-        if (entry && entry.id === id) {
-          // Check ownership
-          if (entry.userId && entry.userId !== effectiveUserId) {
-            console.log(`[KnowledgeBase] Entry not found for deletion: ${id}`);
-            return false;
+          if (entry && entry.id === id) {
+            if (entry.userId && entry.userId !== effectiveUserId) {
+              console.log(`[KnowledgeBase] Entry not found for deletion: ${id}`);
+              return false;
+            }
+
+            await this.storage.delete(filePath);
+            console.log(`[KnowledgeBase] Deleted entry: ${id}`);
+            return true;
           }
-
-          fs.unlinkSync(filePath);
-          console.log(`[KnowledgeBase] Deleted entry: ${id}`);
-          return true;
+        } catch (error) {
+          console.error(`[KnowledgeBase] Error processing ${file}:`, error);
         }
       }
     }
 
     console.log(`[KnowledgeBase] Entry not found for deletion: ${id}`);
     return false;
-  },
+  }
 
   /**
    * Get statistics about knowledge base entries for a user
-   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
-  getStats: (userId: string | undefined): KnowledgeBaseStats => {
+  async getStats(userId: string | undefined): Promise<KnowledgeBaseStats> {
     const effectiveUserId = getEffectiveUserId(userId);
-    const kbPath = getKnowledgeBasePath();
-    if (!kbPath || !fs.existsSync(kbPath)) {
-      return {
-        total: 0,
-        averageScore: 0,
-        thisWeek: 0,
-        uniqueCompanies: 0
-      };
+    const emptyStats: KnowledgeBaseStats = {
+      total: 0,
+      averageScore: 0,
+      thisWeek: 0,
+      uniqueCompanies: 0
+    };
+
+    const exists = await this.storage.exists(this.folder);
+    if (!exists) {
+      return emptyStats;
     }
 
-    const files = fs.readdirSync(kbPath).filter(f => f.endsWith('.md'));
+    const files = await this.storage.list(this.folder);
+    const mdFiles = files.filter(f => f.endsWith('.md'));
     const companies = new Set<string>();
     let totalScore = 0;
     let thisWeekCount = 0;
@@ -862,20 +850,24 @@ export const knowledgeBaseStore = {
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    for (const file of files) {
-      const entry = parseEntry(path.join(kbPath, file));
-      if (entry) {
-        // Filter by ownership - include if no userId set (legacy) or matches
-        const isOwned = !entry.userId || entry.userId === effectiveUserId;
-        if (!isOwned) continue;
+    for (const file of mdFiles) {
+      try {
+        const content = await this.storage.read(`${this.folder}/${file}`);
+        const entry = parseEntryContent(content, file);
+        if (entry) {
+          const isOwned = !entry.userId || entry.userId === effectiveUserId;
+          if (!isOwned) continue;
 
-        validEntries++;
-        companies.add(entry.company);
-        totalScore += entry.analysis.finalScore;
+          validEntries++;
+          companies.add(entry.company);
+          totalScore += entry.analysis.finalScore;
 
-        if (new Date(entry.createdAt) >= sevenDaysAgo) {
-          thisWeekCount++;
+          if (new Date(entry.createdAt) >= sevenDaysAgo) {
+            thisWeekCount++;
+          }
         }
+      } catch (error) {
+        console.error(`[KnowledgeBase] Error reading ${file}:`, error);
       }
     }
 
@@ -885,61 +877,74 @@ export const knowledgeBaseStore = {
       thisWeek: thisWeekCount,
       uniqueCompanies: companies.size
     };
-  },
+  }
 
   /**
    * Get list of unique companies for filter dropdown
-   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
-  getCompanies: (userId: string | undefined): string[] => {
+  async getCompanies(userId: string | undefined): Promise<string[]> {
     const effectiveUserId = getEffectiveUserId(userId);
-    const kbPath = getKnowledgeBasePath();
-    if (!kbPath || !fs.existsSync(kbPath)) {
+
+    const exists = await this.storage.exists(this.folder);
+    if (!exists) {
       return [];
     }
 
-    const files = fs.readdirSync(kbPath).filter(f => f.endsWith('.md'));
+    const files = await this.storage.list(this.folder);
+    const mdFiles = files.filter(f => f.endsWith('.md'));
     const companies = new Set<string>();
 
-    for (const file of files) {
-      const entry = parseEntry(path.join(kbPath, file));
-      if (entry && entry.company) {
-        // Filter by ownership
-        const isOwned = !entry.userId || entry.userId === effectiveUserId;
-        if (isOwned) {
-          companies.add(entry.company);
+    for (const file of mdFiles) {
+      try {
+        const content = await this.storage.read(`${this.folder}/${file}`);
+        const entry = parseEntryContent(content, file);
+        if (entry && entry.company) {
+          const isOwned = !entry.userId || entry.userId === effectiveUserId;
+          if (isOwned) {
+            companies.add(entry.company);
+          }
         }
+      } catch (error) {
+        console.error(`[KnowledgeBase] Error reading ${file}:`, error);
       }
     }
 
     return Array.from(companies).sort();
-  },
+  }
 
   /**
    * Get list of unique job titles for filter dropdown
-   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
-  getJobTitles: (userId: string | undefined): string[] => {
+  async getJobTitles(userId: string | undefined): Promise<string[]> {
     const effectiveUserId = getEffectiveUserId(userId);
-    const kbPath = getKnowledgeBasePath();
-    if (!kbPath || !fs.existsSync(kbPath)) {
+
+    const exists = await this.storage.exists(this.folder);
+    if (!exists) {
       return [];
     }
 
-    const files = fs.readdirSync(kbPath).filter(f => f.endsWith('.md'));
+    const files = await this.storage.list(this.folder);
+    const mdFiles = files.filter(f => f.endsWith('.md'));
     const jobTitles = new Set<string>();
 
-    for (const file of files) {
-      const entry = parseEntry(path.join(kbPath, file));
-      if (entry && entry.jobTitle) {
-        // Filter by ownership
-        const isOwned = !entry.userId || entry.userId === effectiveUserId;
-        if (isOwned) {
-          jobTitles.add(entry.jobTitle);
+    for (const file of mdFiles) {
+      try {
+        const content = await this.storage.read(`${this.folder}/${file}`);
+        const entry = parseEntryContent(content, file);
+        if (entry && entry.jobTitle) {
+          const isOwned = !entry.userId || entry.userId === effectiveUserId;
+          if (isOwned) {
+            jobTitles.add(entry.jobTitle);
+          }
         }
+      } catch (error) {
+        console.error(`[KnowledgeBase] Error reading ${file}:`, error);
       }
     }
 
     return Array.from(jobTitles).sort();
   }
-};
+}
+
+// Export singleton instance for backward compatibility
+export const knowledgeBaseStore = new KnowledgeBaseStore();

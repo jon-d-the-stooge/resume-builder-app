@@ -5,12 +5,28 @@ import {
   ContentType,
   SearchQuery,
   Frontmatter,
-  DateRange,
-  NoteSearchResult
+  DateRange
 } from '../types';
-import { obsidianClient } from './obsidianClient';
+import { StorageProvider, FileStorage } from '../shared/storage';
 import { markdownGenerator } from './markdownGenerator';
 import { SearchQueryBuilder } from './searchQueryBuilder';
+import * as path from 'path';
+
+/**
+ * Configuration options for ContentManagerImpl
+ */
+export interface ContentManagerOptions {
+  /**
+   * Storage provider for persistence
+   * Defaults to FileStorage with user's Documents/ObsidianVault path
+   */
+  storage?: StorageProvider;
+
+  /**
+   * Root path for FileStorage (only used if storage not provided)
+   */
+  storagePath?: string;
+}
 
 /**
  * Content Manager implementation
@@ -19,10 +35,78 @@ import { SearchQueryBuilder } from './searchQueryBuilder';
 export class ContentManagerImpl implements ContentManager {
   // In-memory cache for content items
   private contentItems: Map<string, ContentItem> = new Map();
-  
+
   // Track parent-child relationships
   private childToParent: Map<string, string> = new Map();
   private parentToChildren: Map<string, Set<string>> = new Map();
+
+  // Storage provider for persistence
+  private storage: StorageProvider;
+
+  constructor(options?: ContentManagerOptions) {
+    if (options?.storage) {
+      this.storage = options.storage;
+    } else {
+      const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+      const defaultPath = options?.storagePath || path.join(homeDir, 'Documents', 'ObsidianVault');
+      this.storage = new FileStorage(defaultPath);
+    }
+  }
+
+  /**
+   * Convert frontmatter object to YAML string
+   */
+  private frontmatterToYaml(frontmatter: Frontmatter): string {
+    const lines: string[] = [];
+
+    if (frontmatter.tags && frontmatter.tags.length > 0) {
+      lines.push(`tags: [${frontmatter.tags.join(', ')}]`);
+    } else {
+      lines.push('tags: []');
+    }
+
+    lines.push(`type: ${frontmatter.type}`);
+    lines.push(`createdAt: ${frontmatter.createdAt}`);
+    lines.push(`updatedAt: ${frontmatter.updatedAt}`);
+
+    if (frontmatter.parentId) {
+      lines.push(`parentId: ${frontmatter.parentId}`);
+    }
+
+    if (frontmatter.childIds && frontmatter.childIds.length > 0) {
+      lines.push('childIds:');
+      frontmatter.childIds.forEach(id => lines.push(`  - ${id}`));
+    }
+
+    if (frontmatter.metadata && Object.keys(frontmatter.metadata).length > 0) {
+      lines.push(`metadata: ${JSON.stringify(frontmatter.metadata)}`);
+    }
+
+    return lines.join('\n') + '\n';
+  }
+
+  /**
+   * Build markdown content with frontmatter
+   */
+  private buildMarkdownWithFrontmatter(content: string, frontmatter: Frontmatter): string {
+    const yaml = this.frontmatterToYaml(frontmatter);
+    return `---\n${yaml}---\n\n${content}`;
+  }
+
+  /**
+   * Write a note with frontmatter to storage
+   */
+  private async writeNote(filePath: string, content: string, frontmatter: Frontmatter): Promise<void> {
+    const fullContent = this.buildMarkdownWithFrontmatter(content, frontmatter);
+    await this.storage.write(filePath, fullContent);
+  }
+
+  /**
+   * Delete a note from storage
+   */
+  private async deleteNote(filePath: string): Promise<void> {
+    await this.storage.delete(filePath);
+  }
   /**
    * Creates a new content item with appropriate tags
    * @param item - The content item input data
@@ -81,7 +165,7 @@ export class ContentManagerImpl implements ContentManager {
     };
     
     // Write to vault
-    await obsidianClient.writeNote(filePath, markdown, frontmatter);
+    await this.writeNote(filePath, markdown, frontmatter);
     
     return contentItem;
   }
@@ -137,7 +221,7 @@ export class ContentManagerImpl implements ContentManager {
     };
     
     // Update in vault
-    await obsidianClient.updateNote(updatedItem.filePath, markdown, frontmatter);
+    await this.writeNote(updatedItem.filePath, markdown, frontmatter);
     
     return updatedItem;
   }
@@ -166,7 +250,7 @@ export class ContentManagerImpl implements ContentManager {
     this.parentToChildren.delete(id);
     
     // Delete from vault
-    await obsidianClient.deleteNote(existing.filePath);
+    await this.deleteNote(existing.filePath);
   }
 
   /**
@@ -215,7 +299,7 @@ export class ContentManagerImpl implements ContentManager {
     };
     
     // Write updated child note
-    await obsidianClient.updateNote(child.filePath, childMarkdown, childFrontmatter);
+    await this.writeNote(child.filePath, childMarkdown, childFrontmatter);
     
     // Update parent's markdown with child links
     parent.updatedAt = new Date();
@@ -241,7 +325,7 @@ export class ContentManagerImpl implements ContentManager {
     };
     
     // Write updated parent note
-    await obsidianClient.updateNote(parent.filePath, parentMarkdown, parentFrontmatter);
+    await this.writeNote(parent.filePath, parentMarkdown, parentFrontmatter);
   }
 
   /**
@@ -298,7 +382,7 @@ export class ContentManagerImpl implements ContentManager {
         childIds: childIds
       };
       
-      await obsidianClient.updateNote(job.filePath, jobMarkdown, jobFrontmatter);
+      await this.writeNote(job.filePath, jobMarkdown, jobFrontmatter);
     }
     
     // Update skill's markdown to reference all jobs
@@ -325,7 +409,7 @@ export class ContentManagerImpl implements ContentManager {
       childIds: undefined
     };
     
-    await obsidianClient.updateNote(skill.filePath, skillMarkdown, skillFrontmatter);
+    await this.writeNote(skill.filePath, skillMarkdown, skillFrontmatter);
   }
 
   /**
@@ -366,6 +450,90 @@ export class ContentManagerImpl implements ContentManager {
   }
 
   /**
+   * Parse frontmatter from markdown content
+   */
+  private parseFrontmatter(content: string): { frontmatter: Frontmatter; body: string } | null {
+    const match = content.match(/^---\n([\s\S]*?)\n---\n\n?([\s\S]*)$/);
+    if (!match) return null;
+
+    try {
+      const yamlContent = match[1];
+      const body = match[2];
+
+      // Simple YAML parsing for our known structure
+      const frontmatter: Partial<Frontmatter> = {
+        tags: [],
+        type: ContentType.SKILL,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        metadata: {}
+      };
+
+      for (const line of yamlContent.split('\n')) {
+        const colonIdx = line.indexOf(':');
+        if (colonIdx === -1) continue;
+
+        const key = line.substring(0, colonIdx).trim();
+        const value = line.substring(colonIdx + 1).trim();
+
+        if (key === 'tags') {
+          if (value.startsWith('[') && value.endsWith(']')) {
+            frontmatter.tags = value.slice(1, -1).split(',').map(t => t.trim()).filter(t => t.length > 0);
+          }
+        } else if (key === 'type') {
+          frontmatter.type = value as ContentType;
+        } else if (key === 'createdAt' || key === 'updatedAt') {
+          (frontmatter as any)[key] = value;
+        } else if (key === 'parentId' && value) {
+          frontmatter.parentId = value;
+        } else if (key === 'metadata') {
+          try {
+            frontmatter.metadata = JSON.parse(value);
+          } catch { /* ignore parsing errors */ }
+        }
+      }
+
+      return { frontmatter: frontmatter as Frontmatter, body };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Recursively scan a directory for markdown files
+   */
+  private async scanDirectory(directory: string): Promise<Array<{ path: string; content: string; frontmatter: Frontmatter }>> {
+    const results: Array<{ path: string; content: string; frontmatter: Frontmatter }> = [];
+
+    try {
+      const exists = await this.storage.exists(directory);
+      if (!exists) return results;
+
+      const entries = await this.storage.list(directory);
+
+      for (const entry of entries) {
+        const fullPath = `${directory}/${entry}`;
+
+        if (entry.endsWith('.md')) {
+          try {
+            const content = await this.storage.read(fullPath);
+            const parsed = this.parseFrontmatter(content);
+            if (parsed) {
+              results.push({ path: fullPath, content: parsed.body, frontmatter: parsed.frontmatter });
+            }
+          } catch { /* skip unreadable files */ }
+        } else if (!entry.includes('.')) {
+          // Likely a directory, recurse
+          const subResults = await this.scanDirectory(fullPath);
+          results.push(...subResults);
+        }
+      }
+    } catch { /* ignore directory errors */ }
+
+    return results;
+  }
+
+  /**
    * Searches for content items based on query criteria
    * Supports tag-based filtering, text search, date range filtering,
    * and multiple simultaneous filters
@@ -377,69 +545,73 @@ export class ContentManagerImpl implements ContentManager {
     if (!SearchQueryBuilder.isValid(query)) {
       throw new Error('Search query must have at least one filter criterion');
     }
-    
-    // Build Obsidian query from search query
-    const builder = new SearchQueryBuilder();
-    
-    if (query.tags) {
-      builder.withTags(query.tags);
-    }
-    
-    if (query.text) {
-      builder.withText(query.text);
-    }
-    
-    const obsidianQuery = builder.toObsidianQuery();
-    
-    // Search vault
-    const results = await obsidianClient.searchNotes(obsidianQuery);
-    
+
+    // Scan the resume-content directory
+    const results = await this.scanDirectory('resume-content');
+
+    // Filter results based on query
+    const filteredResults = results.filter(result => {
+      // Filter by tags
+      if (query.tags && query.tags.length > 0) {
+        const hasAllTags = query.tags.every(tag => result.frontmatter.tags.includes(tag));
+        if (!hasAllTags) return false;
+      }
+
+      // Filter by text
+      if (query.text) {
+        const searchText = query.text.toLowerCase();
+        const contentMatches = result.content.toLowerCase().includes(searchText);
+        const frontmatterMatches = JSON.stringify(result.frontmatter).toLowerCase().includes(searchText);
+        if (!contentMatches && !frontmatterMatches) return false;
+      }
+
+      return true;
+    });
+
     // Handle empty results gracefully
-    if (results.length === 0) {
+    if (filteredResults.length === 0) {
       return [];
     }
-    
+
     // Convert to ContentItems and apply additional filters
     const items: ContentItem[] = [];
-    
-    for (const result of results) {
+
+    for (const result of filteredResults) {
       // Filter by content type if specified
       if (query.contentType && result.frontmatter.type !== query.contentType) {
         continue;
       }
-      
+
       // Filter by date range if specified
-      if (query.dateRange && result.frontmatter.metadata.dateRange) {
+      if (query.dateRange && result.frontmatter.metadata?.dateRange) {
         if (!this.dateRangesOverlap(query.dateRange, result.frontmatter.metadata.dateRange)) {
           continue;
         }
       }
-      
+
       // Get from cache or reconstruct
       const id = this.extractIdFromPath(result.path);
       let item = this.contentItems.get(id);
-      
+
       if (!item) {
-        // Reconstruct from vault data with full metadata and hierarchical context
-        item = this.reconstructContentItem(result);
-        
+        // Reconstruct from storage data with full metadata and hierarchical context
+        item = this.reconstructContentItemFromStorage(result);
+
         // Cache it
         this.contentItems.set(id, item);
       }
-      
+
       items.push(item);
     }
-    
+
     return items;
   }
 
   /**
-   * Reconstructs a ContentItem from vault search result
+   * Reconstructs a ContentItem from storage search result
    * Preserves all tags, metadata, and hierarchical context
-   * @param result - Search result from vault
-   * @returns Reconstructed ContentItem
    */
-  private reconstructContentItem(result: NoteSearchResult): ContentItem {
+  private reconstructContentItemFromStorage(result: { path: string; content: string; frontmatter: Frontmatter }): ContentItem {
     const id = this.extractIdFromPath(result.path);
     const contentType = result.frontmatter.type;
 
@@ -447,9 +619,9 @@ export class ContentManagerImpl implements ContentManager {
       id,
       type: contentType,
       content: this.extractContentFromMarkdown(result.content, contentType),
-      tags: result.frontmatter.tags, // Preserve all tags
-      metadata: result.frontmatter.metadata, // Preserve all metadata
-      parentId: result.frontmatter.parentId, // Preserve hierarchical context
+      tags: result.frontmatter.tags,
+      metadata: result.frontmatter.metadata || {},
+      parentId: result.frontmatter.parentId,
       createdAt: new Date(result.frontmatter.createdAt),
       updatedAt: new Date(result.frontmatter.updatedAt),
       filePath: result.path
