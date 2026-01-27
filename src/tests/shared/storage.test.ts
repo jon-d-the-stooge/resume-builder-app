@@ -11,6 +11,7 @@ import * as os from 'os';
 import { StorageProvider } from '../../shared/storage/interface';
 import { FileStorage } from '../../shared/storage/fileStorage';
 import { MemoryStorage } from '../../shared/storage/memoryStorage';
+import { DatabaseStorage } from '../../shared/storage/databaseStorage';
 
 /**
  * Shared test suite that both implementations must pass
@@ -171,6 +172,21 @@ describe('Storage Providers', () => {
     };
   });
 
+  // Test DatabaseStorage
+  testStorageProvider('DatabaseStorage', async () => {
+    const storage = new DatabaseStorage({
+      databasePath: ':memory:',
+      userId: 'test-user',
+    });
+    return {
+      storage,
+      cleanup: async () => {
+        storage.clear();
+        storage.close();
+      },
+    };
+  });
+
   // MemoryStorage-specific tests
   describe('MemoryStorage specifics', () => {
     it('should clear all data', async () => {
@@ -226,6 +242,133 @@ describe('Storage Providers', () => {
       await storage.delete('dir');
 
       expect(await storage.exists('dir')).toBe(false);
+    });
+  });
+
+  // DatabaseStorage-specific tests
+  describe('DatabaseStorage specifics', () => {
+    let storage: DatabaseStorage;
+
+    beforeEach(() => {
+      storage = new DatabaseStorage({
+        databasePath: ':memory:',
+        userId: 'test-user',
+      });
+    });
+
+    afterEach(() => {
+      storage.close();
+    });
+
+    it('should return the user ID', () => {
+      expect(storage.getUserId()).toBe('test-user');
+    });
+
+    it('should create storage for different user', async () => {
+      await storage.write('file.txt', 'user1-content');
+
+      const user2Storage = storage.forUser('user2');
+      await user2Storage.write('file.txt', 'user2-content');
+
+      // Each user has their own file
+      expect(await storage.read('file.txt')).toBe('user1-content');
+      expect(await user2Storage.read('file.txt')).toBe('user2-content');
+    });
+
+    it('should isolate data between users', async () => {
+      await storage.write('secret.txt', 'user1-secret');
+
+      const user2Storage = storage.forUser('user2');
+
+      // User 2 should not see User 1's file
+      expect(await user2Storage.exists('secret.txt')).toBe(false);
+      await expect(user2Storage.read('secret.txt')).rejects.toThrow();
+    });
+
+    it('should clear only current user data', async () => {
+      const user2Storage = storage.forUser('user2');
+
+      await storage.write('user1.txt', 'content1');
+      await user2Storage.write('user2.txt', 'content2');
+
+      storage.clear();
+
+      // User 1's data is gone
+      expect(await storage.exists('user1.txt')).toBe(false);
+      // User 2's data remains
+      expect(await user2Storage.exists('user2.txt')).toBe(true);
+    });
+
+    it('should provide storage statistics', async () => {
+      await storage.write('file1.txt', 'hello');
+      await storage.write('file2.txt', 'world!');
+      await storage.mkdir('subdir');
+
+      const stats = storage.getStats();
+
+      expect(stats.fileCount).toBe(2);
+      expect(stats.totalSize).toBe(11); // 'hello' + 'world!'
+      expect(stats.directoryCount).toBe(1);
+    });
+
+    it('should dump all files for current user', async () => {
+      await storage.write('a.txt', 'A');
+      await storage.write('dir/b.txt', 'B');
+
+      const dump = storage.dump();
+
+      expect(dump['a.txt']).toBe('A');
+      expect(dump['dir/b.txt']).toBe('B');
+    });
+
+    it('should handle directory operations', async () => {
+      await storage.mkdir('new/nested/dir');
+      expect(await storage.exists('new/nested/dir')).toBe(true);
+      expect(await storage.exists('new/nested')).toBe(true);
+      expect(await storage.exists('new')).toBe(true);
+    });
+
+    it('should delete directories and children', async () => {
+      await storage.write('dir/file1.txt', 'content1');
+      await storage.write('dir/sub/file2.txt', 'content2');
+
+      await storage.delete('dir');
+
+      expect(await storage.exists('dir')).toBe(false);
+      expect(await storage.exists('dir/file1.txt')).toBe(false);
+      expect(await storage.exists('dir/sub/file2.txt')).toBe(false);
+    });
+
+    it('should move files between paths', async () => {
+      await storage.write('source.txt', 'content');
+      await storage.move('source.txt', 'dest.txt');
+
+      expect(await storage.exists('source.txt')).toBe(false);
+      expect(await storage.read('dest.txt')).toBe('content');
+    });
+
+    it('should move directories with children', async () => {
+      await storage.write('src/a.txt', 'A');
+      await storage.write('src/b.txt', 'B');
+      await storage.mkdir('src');
+
+      await storage.move('src', 'dst');
+
+      expect(await storage.exists('src')).toBe(false);
+      expect(await storage.read('dst/a.txt')).toBe('A');
+      expect(await storage.read('dst/b.txt')).toBe('B');
+    });
+
+    it('should list with metadata including directories', async () => {
+      await storage.write('file.txt', 'content');
+      await storage.mkdir('subdir');
+
+      const entries = await storage.listWithMetadata('.');
+      const file = entries.find((e) => e.name === 'file.txt');
+      const dir = entries.find((e) => e.name === 'subdir');
+
+      expect(file?.isDirectory).toBe(false);
+      expect(dir?.isDirectory).toBe(true);
     });
   });
 
