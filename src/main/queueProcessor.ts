@@ -187,7 +187,8 @@ export class QueueProcessor {
     let certificationCount = 0;
 
     // Get all vaults and use the first one (or most recent)
-    const vaults = await vaultManager.getAllVaults();
+    // Note: In Electron desktop context, userId is undefined (uses default user)
+    const vaults = await vaultManager.getAllVaults(undefined);
     if (vaults.length === 0) {
       throw new Error('No resume content found in vault. Please upload a resume first.');
     }

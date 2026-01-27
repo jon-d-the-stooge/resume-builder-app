@@ -11,11 +11,11 @@ const router = Router();
 
 /**
  * GET /api/vaults
- * List all vaults
+ * List all vaults for the authenticated user
  */
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const vaults = await vaultManager.getAllVaults();
+    const vaults = await vaultManager.getAllVaults(req.user?.id);
     res.json(vaults);
   } catch (error) {
     console.error('Error listing vaults:', error);
@@ -28,12 +28,12 @@ router.get('/', async (req: Request, res: Response) => {
 
 /**
  * POST /api/vaults
- * Create a new vault
+ * Create a new vault for the authenticated user
  */
 router.post('/', async (req: Request, res: Response) => {
   try {
     const vaultData = req.body;
-    const vault = await vaultManager.createVault(vaultData);
+    const vault = await vaultManager.createVault(req.user?.id, vaultData);
     res.status(201).json(vault);
   } catch (error) {
     console.error('Error creating vault:', error);
@@ -46,12 +46,12 @@ router.post('/', async (req: Request, res: Response) => {
 
 /**
  * GET /api/vaults/:id
- * Get a single vault by ID
+ * Get a single vault by ID (only if owned by authenticated user)
  */
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const vault = await vaultManager.getVault(id);
+    const vault = await vaultManager.getVault(req.user?.id, id);
 
     if (!vault) {
       res.status(404).json({
@@ -73,13 +73,13 @@ router.get('/:id', async (req: Request, res: Response) => {
 
 /**
  * PUT /api/vaults/:id
- * Update a vault's profile
+ * Update a vault's profile (only if owned by authenticated user)
  */
 router.put('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const profileUpdates = req.body;
-    const vault = await vaultManager.updateVaultProfile(id, profileUpdates);
+    const vault = await vaultManager.updateVaultProfile(req.user?.id, id, profileUpdates);
     res.json(vault);
   } catch (error) {
     console.error('Error updating vault:', error);
@@ -102,12 +102,12 @@ router.put('/:id', async (req: Request, res: Response) => {
 
 /**
  * DELETE /api/vaults/:id
- * Delete a vault
+ * Delete a vault (only if owned by authenticated user)
  */
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    await vaultManager.deleteVault(id);
+    await vaultManager.deleteVault(req.user?.id, id);
     res.status(204).send();
   } catch (error) {
     console.error('Error deleting vault:', error);

@@ -33,19 +33,19 @@ export interface MaskedSettings {
 }
 
 export interface SettingsStore {
-  initialize: () => Promise<void>;
-  isReady: () => boolean;
-  get: () => Settings;
-  getApiKey: () => string;
-  getProvider: () => LLMProvider;
-  getDefaultModel: () => string | undefined;
-  getAdzunaCredentials: () => { appId: string; apiKey: string } | null;
-  getJSearchApiKey: () => string | null;
-  getMaxIterations: () => number;
-  set: (settings: Partial<Settings>) => void;
-  hasValidKey: () => boolean;
-  getMasked: () => MaskedSettings;
-  clear: () => void;
+  initialize: (userId?: string) => Promise<void>;
+  isReady: (userId?: string) => boolean;
+  get: (userId?: string) => Settings;
+  getApiKey: (userId?: string) => string;
+  getProvider: (userId?: string) => LLMProvider;
+  getDefaultModel: (userId?: string) => string | undefined;
+  getAdzunaCredentials: (userId?: string) => { appId: string; apiKey: string } | null;
+  getJSearchApiKey: (userId?: string) => string | null;
+  getMaxIterations: (userId?: string) => number;
+  set: (userId: string | undefined, settings: Partial<Settings>) => void;
+  hasValidKey: (userId?: string) => boolean;
+  getMasked: (userId?: string) => MaskedSettings;
+  clear: (userId?: string) => void;
 }
 
 export const DEFAULT_SETTINGS: Settings = {

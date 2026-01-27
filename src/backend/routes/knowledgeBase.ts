@@ -13,7 +13,7 @@ const router = Router();
 
 /**
  * GET /api/knowledge-base
- * List all knowledge base entries with optional filtering and sorting
+ * List all knowledge base entries for the authenticated user with optional filtering and sorting
  * Maps to IPC: knowledge-base-list
  *
  * Query params:
@@ -58,7 +58,7 @@ router.get('/', async (req: Request, res: Response) => {
       }
     }
 
-    const entries = knowledgeBaseStore.list(Object.keys(filters).length > 0 ? filters : undefined);
+    const entries = knowledgeBaseStore.list(req.user?.id, Object.keys(filters).length > 0 ? filters : undefined);
 
     res.json({
       success: true,
@@ -75,12 +75,12 @@ router.get('/', async (req: Request, res: Response) => {
 
 /**
  * GET /api/knowledge-base/stats
- * Get knowledge base statistics
+ * Get knowledge base statistics for the authenticated user
  * Maps to IPC: knowledge-base-stats
  */
-router.get('/stats', async (_req: Request, res: Response) => {
+router.get('/stats', async (req: Request, res: Response) => {
   try {
-    const stats = knowledgeBaseStore.getStats();
+    const stats = knowledgeBaseStore.getStats(req.user?.id);
 
     res.json({
       success: true,
@@ -97,12 +97,12 @@ router.get('/stats', async (_req: Request, res: Response) => {
 
 /**
  * GET /api/knowledge-base/companies
- * Get list of unique companies for filter dropdowns
+ * Get list of unique companies for filter dropdowns (from user's entries)
  * Maps to IPC: knowledge-base-companies
  */
-router.get('/companies', async (_req: Request, res: Response) => {
+router.get('/companies', async (req: Request, res: Response) => {
   try {
-    const companies = knowledgeBaseStore.getCompanies();
+    const companies = knowledgeBaseStore.getCompanies(req.user?.id);
 
     res.json({
       success: true,
@@ -119,12 +119,12 @@ router.get('/companies', async (_req: Request, res: Response) => {
 
 /**
  * GET /api/knowledge-base/job-titles
- * Get list of unique job titles for filter dropdowns
+ * Get list of unique job titles for filter dropdowns (from user's entries)
  * Maps to IPC: knowledge-base-job-titles
  */
-router.get('/job-titles', async (_req: Request, res: Response) => {
+router.get('/job-titles', async (req: Request, res: Response) => {
   try {
-    const jobTitles = knowledgeBaseStore.getJobTitles();
+    const jobTitles = knowledgeBaseStore.getJobTitles(req.user?.id);
 
     res.json({
       success: true,
@@ -141,13 +141,13 @@ router.get('/job-titles', async (_req: Request, res: Response) => {
 
 /**
  * GET /api/knowledge-base/:id
- * Get a single knowledge base entry by ID
+ * Get a single knowledge base entry by ID (only if owned by authenticated user)
  * Maps to IPC: knowledge-base-get
  */
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const entry = knowledgeBaseStore.get(id);
+    const entry = knowledgeBaseStore.get(req.user?.id, id);
 
     if (!entry) {
       res.status(404).json({
@@ -172,7 +172,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 
 /**
  * POST /api/knowledge-base
- * Save a new knowledge base entry
+ * Save a new knowledge base entry for the authenticated user
  * Maps to IPC: knowledge-base-save
  */
 router.post('/', async (req: Request, res: Response) => {
@@ -213,7 +213,7 @@ router.post('/', async (req: Request, res: Response) => {
       return;
     }
 
-    const entry = knowledgeBaseStore.save({
+    const entry = knowledgeBaseStore.save(req.user?.id, {
       jobTitle,
       company,
       jobDescription,
@@ -251,7 +251,7 @@ router.post('/', async (req: Request, res: Response) => {
 
 /**
  * PATCH /api/knowledge-base/:id
- * Update an existing knowledge base entry (notes, tags, optimizedResume)
+ * Update an existing knowledge base entry (only if owned by authenticated user)
  * Maps to IPC: knowledge-base-update
  */
 router.patch('/:id', async (req: Request, res: Response) => {
@@ -277,7 +277,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
       return;
     }
 
-    const entry = knowledgeBaseStore.update(id, { notes, tags, optimizedResume });
+    const entry = knowledgeBaseStore.update(req.user?.id, id, { notes, tags, optimizedResume });
 
     if (!entry) {
       res.status(404).json({
@@ -302,13 +302,13 @@ router.patch('/:id', async (req: Request, res: Response) => {
 
 /**
  * DELETE /api/knowledge-base/:id
- * Delete a knowledge base entry
+ * Delete a knowledge base entry (only if owned by authenticated user)
  * Maps to IPC: knowledge-base-delete
  */
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const deleted = knowledgeBaseStore.delete(id);
+    const deleted = knowledgeBaseStore.delete(req.user?.id, id);
 
     if (!deleted) {
       res.status(404).json({
@@ -330,7 +330,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 
 /**
  * GET /api/knowledge-base/:id/export
- * Export a knowledge base entry in the specified format
+ * Export a knowledge base entry in the specified format (only if owned by authenticated user)
  * Maps to IPC: knowledge-base-export (but returns content instead of file dialog)
  *
  * Query params:
@@ -344,7 +344,7 @@ router.get('/:id/export', async (req: Request, res: Response) => {
     const { id } = req.params;
     const format = (req.query.format as string) || 'md';
 
-    const entry = knowledgeBaseStore.get(id);
+    const entry = knowledgeBaseStore.get(req.user?.id, id);
 
     if (!entry) {
       res.status(404).json({

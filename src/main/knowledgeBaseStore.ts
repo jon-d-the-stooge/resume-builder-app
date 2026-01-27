@@ -36,6 +36,7 @@ export interface KnowledgeBaseAnalysis {
 
 export interface KnowledgeBaseEntry {
   id: string;                  // Format: kb-{timestamp}-{random6}
+  userId?: string;             // Owner of this entry (for multi-user support)
   jobTitle: string;
   company: string;
   jobDescription: string;
@@ -64,6 +65,7 @@ export interface KnowledgeBaseEntry {
 
 export interface KnowledgeBaseSummary {
   id: string;
+  userId?: string; // Owner of this entry (for multi-user support)
   jobTitle: string;
   company: string;
   score: number;
@@ -196,6 +198,18 @@ export interface OptimizationMetrics {
 // ============================================================================
 
 const KNOWLEDGE_BASE_FOLDER = 'KnowledgeBase';
+
+/**
+ * Default user ID for backward compatibility when userId is not provided
+ */
+const DEFAULT_USER_ID = 'default';
+
+/**
+ * Get effective userId, falling back to default for backward compatibility
+ */
+function getEffectiveUserId(userId: string | undefined): string {
+  return userId || DEFAULT_USER_ID;
+}
 
 // ============================================================================
 // Helper Functions
@@ -342,6 +356,7 @@ function generateMarkdown(entry: KnowledgeBaseEntry): string {
   const frontmatter = `---
 type: knowledge-base-entry
 id: ${entry.id}
+user_id: ${entry.userId || ''}
 job_title: ${escapeYaml(entry.jobTitle)}
 company: ${escapeYaml(entry.company)}
 source_url: ${entry.sourceUrl || ''}
@@ -507,6 +522,7 @@ function parseEntry(filePath: string): KnowledgeBaseEntry | null {
     // Build base entry
     const entry: KnowledgeBaseEntry = {
       id: frontmatter.id || path.basename(filePath, '.md'),
+      userId: frontmatter.user_id || undefined,
       jobTitle: frontmatter.job_title || '',
       company: frontmatter.company || '',
       jobDescription: jobDescMatch ? jobDescMatch[1].trim() : '',
@@ -559,9 +575,11 @@ function parseEntry(filePath: string): KnowledgeBaseEntry | null {
 
 export const knowledgeBaseStore = {
   /**
-   * List all knowledge base entries with optional filtering and sorting
+   * List all knowledge base entries for a user with optional filtering and sorting
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
-  list: (filters?: KnowledgeBaseFilters): KnowledgeBaseSummary[] => {
+  list: (userId: string | undefined, filters?: KnowledgeBaseFilters): KnowledgeBaseSummary[] => {
+    const effectiveUserId = getEffectiveUserId(userId);
     const kbPath = getKnowledgeBasePath();
     if (!kbPath || !fs.existsSync(kbPath)) {
       return [];
@@ -573,6 +591,12 @@ export const knowledgeBaseStore = {
     for (const file of files) {
       const entry = parseEntry(path.join(kbPath, file));
       if (entry) {
+        // Filter by ownership - include if no userId set (legacy) or matches
+        const isOwned = !entry.userId || entry.userId === effectiveUserId;
+        if (!isOwned) {
+          continue;
+        }
+
         // Apply company filter
         if (filters?.company && entry.company !== filters.company) {
           continue;
@@ -614,6 +638,7 @@ export const knowledgeBaseStore = {
 
         entries.push({
           id: entry.id,
+          userId: entry.userId,
           jobTitle: entry.jobTitle,
           company: entry.company,
           score: entry.analysis.finalScore,
@@ -645,8 +670,11 @@ export const knowledgeBaseStore = {
 
   /**
    * Get a single entry by ID
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
+   * Returns null if not found or not owned (same response to prevent enumeration)
    */
-  get: (id: string): KnowledgeBaseEntry | null => {
+  get: (userId: string | undefined, id: string): KnowledgeBaseEntry | null => {
+    const effectiveUserId = getEffectiveUserId(userId);
     const kbPath = getKnowledgeBasePath();
     if (!kbPath || !fs.existsSync(kbPath)) {
       return null;
@@ -658,6 +686,11 @@ export const knowledgeBaseStore = {
       if (file.includes(id)) {
         const entry = parseEntry(path.join(kbPath, file));
         if (entry && entry.id === id) {
+          // Check ownership - return null for non-owned (same as not found)
+          if (entry.userId && entry.userId !== effectiveUserId) {
+            console.log(`[KnowledgeBase] Entry not found: ${id}`);
+            return null;
+          }
           console.log(`[KnowledgeBase] Found entry: ${id}`);
           return entry;
         }
@@ -670,8 +703,10 @@ export const knowledgeBaseStore = {
 
   /**
    * Save a new knowledge base entry
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
-  save: (data: Omit<KnowledgeBaseEntry, 'id' | 'createdAt'>): KnowledgeBaseEntry | null => {
+  save: (userId: string | undefined, data: Omit<KnowledgeBaseEntry, 'id' | 'createdAt' | 'userId'>): KnowledgeBaseEntry | null => {
+    const effectiveUserId = getEffectiveUserId(userId);
     const kbPath = ensureKnowledgeBaseFolder();
     if (!kbPath) {
       console.error('[KnowledgeBase] Cannot save: vault path not configured');
@@ -683,6 +718,7 @@ export const knowledgeBaseStore = {
 
     const entry: KnowledgeBaseEntry = {
       id,
+      userId: effectiveUserId,
       jobTitle: data.jobTitle,
       company: data.company,
       jobDescription: data.jobDescription,
@@ -711,12 +747,15 @@ export const knowledgeBaseStore = {
 
   /**
    * Update an existing entry (notes, tags, or resume content)
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
+   * Returns null if not found or not owned
    */
-  update: (id: string, updates: {
+  update: (userId: string | undefined, id: string, updates: {
     notes?: string;
     tags?: string[];
     optimizedResume?: string;
   }): KnowledgeBaseEntry | null => {
+    const effectiveUserId = getEffectiveUserId(userId);
     const kbPath = getKnowledgeBasePath();
     if (!kbPath || !fs.existsSync(kbPath)) {
       return null;
@@ -730,6 +769,12 @@ export const knowledgeBaseStore = {
         const entry = parseEntry(filePath);
 
         if (entry && entry.id === id) {
+          // Check ownership
+          if (entry.userId && entry.userId !== effectiveUserId) {
+            console.log(`[KnowledgeBase] Entry not found for update: ${id}`);
+            return null;
+          }
+
           // Apply updates
           if (updates.notes !== undefined) {
             entry.notes = updates.notes;
@@ -757,8 +802,11 @@ export const knowledgeBaseStore = {
 
   /**
    * Delete an entry
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
+   * Returns false if not found or not owned
    */
-  delete: (id: string): boolean => {
+  delete: (userId: string | undefined, id: string): boolean => {
+    const effectiveUserId = getEffectiveUserId(userId);
     const kbPath = getKnowledgeBasePath();
     if (!kbPath || !fs.existsSync(kbPath)) {
       return false;
@@ -772,6 +820,12 @@ export const knowledgeBaseStore = {
         const entry = parseEntry(filePath);
 
         if (entry && entry.id === id) {
+          // Check ownership
+          if (entry.userId && entry.userId !== effectiveUserId) {
+            console.log(`[KnowledgeBase] Entry not found for deletion: ${id}`);
+            return false;
+          }
+
           fs.unlinkSync(filePath);
           console.log(`[KnowledgeBase] Deleted entry: ${id}`);
           return true;
@@ -784,9 +838,11 @@ export const knowledgeBaseStore = {
   },
 
   /**
-   * Get statistics about knowledge base entries
+   * Get statistics about knowledge base entries for a user
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
-  getStats: (): KnowledgeBaseStats => {
+  getStats: (userId: string | undefined): KnowledgeBaseStats => {
+    const effectiveUserId = getEffectiveUserId(userId);
     const kbPath = getKnowledgeBasePath();
     if (!kbPath || !fs.existsSync(kbPath)) {
       return {
@@ -809,6 +865,10 @@ export const knowledgeBaseStore = {
     for (const file of files) {
       const entry = parseEntry(path.join(kbPath, file));
       if (entry) {
+        // Filter by ownership - include if no userId set (legacy) or matches
+        const isOwned = !entry.userId || entry.userId === effectiveUserId;
+        if (!isOwned) continue;
+
         validEntries++;
         companies.add(entry.company);
         totalScore += entry.analysis.finalScore;
@@ -829,8 +889,10 @@ export const knowledgeBaseStore = {
 
   /**
    * Get list of unique companies for filter dropdown
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
-  getCompanies: (): string[] => {
+  getCompanies: (userId: string | undefined): string[] => {
+    const effectiveUserId = getEffectiveUserId(userId);
     const kbPath = getKnowledgeBasePath();
     if (!kbPath || !fs.existsSync(kbPath)) {
       return [];
@@ -842,7 +904,11 @@ export const knowledgeBaseStore = {
     for (const file of files) {
       const entry = parseEntry(path.join(kbPath, file));
       if (entry && entry.company) {
-        companies.add(entry.company);
+        // Filter by ownership
+        const isOwned = !entry.userId || entry.userId === effectiveUserId;
+        if (isOwned) {
+          companies.add(entry.company);
+        }
       }
     }
 
@@ -851,8 +917,10 @@ export const knowledgeBaseStore = {
 
   /**
    * Get list of unique job titles for filter dropdown
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
-  getJobTitles: (): string[] => {
+  getJobTitles: (userId: string | undefined): string[] => {
+    const effectiveUserId = getEffectiveUserId(userId);
     const kbPath = getKnowledgeBasePath();
     if (!kbPath || !fs.existsSync(kbPath)) {
       return [];
@@ -864,7 +932,11 @@ export const knowledgeBaseStore = {
     for (const file of files) {
       const entry = parseEntry(path.join(kbPath, file));
       if (entry && entry.jobTitle) {
-        jobTitles.add(entry.jobTitle);
+        // Filter by ownership
+        const isOwned = !entry.userId || entry.userId === effectiveUserId;
+        if (isOwned) {
+          jobTitles.add(entry.jobTitle);
+        }
       }
     }
 

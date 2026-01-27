@@ -2,6 +2,7 @@
  * Web Settings Store Implementation
  *
  * Uses JSON file storage for settings persistence outside of Electron.
+ * Supports per-user settings files for multi-user environments.
  * This is a temporary solution - will be replaced with database storage in Phase 4.
  */
 
@@ -10,12 +11,36 @@ import * as path from 'path';
 import type { Settings, SettingsStore, MaskedSettings } from './types';
 import { DEFAULT_SETTINGS } from './types';
 
-// Store settings in a JSON file in the project data directory
+// Store settings in JSON files in the project data directory
 const DATA_DIR = process.env.SETTINGS_DIR || path.join(process.cwd(), 'data');
-const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 
-let settings: Settings = { ...DEFAULT_SETTINGS };
-let initialized = false;
+/**
+ * Default user ID for backward compatibility when userId is not provided
+ */
+const DEFAULT_USER_ID = 'default';
+
+/**
+ * Get effective userId, falling back to default for backward compatibility
+ */
+function getEffectiveUserId(userId: string | undefined): string {
+  return userId || DEFAULT_USER_ID;
+}
+
+/**
+ * Get the settings file path for a specific user
+ */
+function getSettingsFilePath(userId: string): string {
+  const effectiveUserId = getEffectiveUserId(userId);
+  // For backward compatibility, 'default' user uses the original settings.json
+  if (effectiveUserId === DEFAULT_USER_ID) {
+    return path.join(DATA_DIR, 'settings.json');
+  }
+  return path.join(DATA_DIR, `settings-${effectiveUserId}.json`);
+}
+
+// Per-user settings cache
+const userSettings: Map<string, Settings> = new Map();
+const userInitialized: Map<string, boolean> = new Map();
 
 function ensureDataDir(): void {
   if (!fs.existsSync(DATA_DIR)) {
@@ -23,88 +48,85 @@ function ensureDataDir(): void {
   }
 }
 
-function loadSettings(): void {
+function loadSettings(userId: string): void {
+  const effectiveUserId = getEffectiveUserId(userId);
   ensureDataDir();
-  if (fs.existsSync(SETTINGS_FILE)) {
+  const settingsFile = getSettingsFilePath(effectiveUserId);
+
+  if (fs.existsSync(settingsFile)) {
     try {
-      const data = fs.readFileSync(SETTINGS_FILE, 'utf-8');
+      const data = fs.readFileSync(settingsFile, 'utf-8');
       const loaded = JSON.parse(data);
-      settings = { ...DEFAULT_SETTINGS, ...loaded };
+      userSettings.set(effectiveUserId, { ...DEFAULT_SETTINGS, ...loaded });
     } catch (error) {
-      console.error('Error loading settings:', error);
-      settings = { ...DEFAULT_SETTINGS };
+      console.error(`Error loading settings for user ${effectiveUserId}:`, error);
+      userSettings.set(effectiveUserId, { ...DEFAULT_SETTINGS });
     }
+  } else {
+    userSettings.set(effectiveUserId, { ...DEFAULT_SETTINGS });
   }
 }
 
-function saveSettings(): void {
+function saveSettings(userId: string): void {
+  const effectiveUserId = getEffectiveUserId(userId);
   ensureDataDir();
+  const settingsFile = getSettingsFilePath(effectiveUserId);
+  const settings = userSettings.get(effectiveUserId) || { ...DEFAULT_SETTINGS };
+
   try {
-    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf-8');
+    fs.writeFileSync(settingsFile, JSON.stringify(settings, null, 2), 'utf-8');
   } catch (error) {
-    console.error('Error saving settings:', error);
+    console.error(`Error saving settings for user ${effectiveUserId}:`, error);
   }
 }
 
-function getApiKey(): string {
+function ensureInitialized(userId: string | undefined): Settings {
+  const effectiveUserId = getEffectiveUserId(userId);
+  if (!userInitialized.get(effectiveUserId)) {
+    loadSettings(effectiveUserId);
+    userInitialized.set(effectiveUserId, true);
+  }
+  return userSettings.get(effectiveUserId) || { ...DEFAULT_SETTINGS };
+}
+
+function getApiKeyForUser(userId: string | undefined): string {
+  const settings = ensureInitialized(userId);
   return settings.llmProvider === 'anthropic'
     ? settings.anthropicApiKey
     : settings.openaiApiKey;
 }
 
 export const settingsStore: SettingsStore = {
-  initialize: async (): Promise<void> => {
-    if (!initialized) {
-      loadSettings();
-      initialized = true;
-    }
+  initialize: async (userId?: string): Promise<void> => {
+    ensureInitialized(userId);
   },
 
-  isReady: (): boolean => {
-    if (!initialized) {
-      loadSettings();
-      initialized = true;
-    }
+  isReady: (userId?: string): boolean => {
+    ensureInitialized(userId);
     return true;
   },
 
-  get: (): Settings => {
-    if (!initialized) {
-      loadSettings();
-      initialized = true;
-    }
+  get: (userId?: string): Settings => {
+    const settings = ensureInitialized(userId);
     return { ...settings };
   },
 
-  getApiKey: (): string => {
-    if (!initialized) {
-      loadSettings();
-      initialized = true;
-    }
-    return getApiKey();
+  getApiKey: (userId?: string): string => {
+    return getApiKeyForUser(userId);
   },
 
-  getProvider: () => {
-    if (!initialized) {
-      loadSettings();
-      initialized = true;
-    }
+  getProvider: (userId?: string) => {
+    const settings = ensureInitialized(userId);
     return settings.llmProvider;
   },
 
-  getDefaultModel: () => {
-    if (!initialized) {
-      loadSettings();
-      initialized = true;
-    }
+  getDefaultModel: (userId?: string) => {
+    const settings = ensureInitialized(userId);
     return settings.defaultModel;
   },
 
-  getAdzunaCredentials: () => {
-    if (!initialized) {
-      loadSettings();
-      initialized = true;
-    }
+  getAdzunaCredentials: (userId?: string) => {
+    const settings = ensureInitialized(userId);
     const { adzunaAppId, adzunaApiKey } = settings;
     if (adzunaAppId && adzunaApiKey) {
       return { appId: adzunaAppId, apiKey: adzunaApiKey };
@@ -112,51 +134,39 @@ export const settingsStore: SettingsStore = {
     return null;
   },
 
-  getJSearchApiKey: () => {
-    if (!initialized) {
-      loadSettings();
-      initialized = true;
-    }
+  getJSearchApiKey: (userId?: string) => {
+    const settings = ensureInitialized(userId);
     const key = settings.jsearchApiKey;
     return key && key.length > 10 ? key : null;
   },
 
-  getMaxIterations: () => {
-    if (!initialized) {
-      loadSettings();
-      initialized = true;
-    }
+  getMaxIterations: (userId?: string) => {
+    const settings = ensureInitialized(userId);
     const value = settings.maxIterations;
     return typeof value === 'number' && value >= 1 && value <= 10 ? value : 3;
   },
 
-  set: (newSettings: Partial<Settings>): void => {
-    if (!initialized) {
-      loadSettings();
-      initialized = true;
-    }
+  set: (userId: string | undefined, newSettings: Partial<Settings>): void => {
+    const effectiveUserId = getEffectiveUserId(userId);
+    const settings = ensureInitialized(userId);
+
     Object.entries(newSettings).forEach(([key, value]) => {
       if (value !== undefined && key in settings) {
         (settings as unknown as Record<string, unknown>)[key] = value;
       }
     });
-    saveSettings();
+
+    userSettings.set(effectiveUserId, settings);
+    saveSettings(effectiveUserId);
   },
 
-  hasValidKey: (): boolean => {
-    if (!initialized) {
-      loadSettings();
-      initialized = true;
-    }
-    const key = getApiKey();
+  hasValidKey: (userId?: string): boolean => {
+    const key = getApiKeyForUser(userId);
     return !!key && key.length > 10;
   },
 
-  getMasked: (): MaskedSettings => {
-    if (!initialized) {
-      loadSettings();
-      initialized = true;
-    }
+  getMasked: (userId?: string): MaskedSettings => {
+    const settings = ensureInitialized(userId);
     return {
       llmProvider: settings.llmProvider,
       anthropicApiKey: settings.anthropicApiKey
@@ -181,8 +191,9 @@ export const settingsStore: SettingsStore = {
     };
   },
 
-  clear: (): void => {
-    settings = { ...DEFAULT_SETTINGS };
-    saveSettings();
+  clear: (userId?: string): void => {
+    const effectiveUserId = getEffectiveUserId(userId);
+    userSettings.set(effectiveUserId, { ...DEFAULT_SETTINGS });
+    saveSettings(effectiveUserId);
   }
 };

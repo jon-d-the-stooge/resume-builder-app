@@ -35,6 +35,18 @@ import { ResumeParser, ParseResult } from './resumeParser';
 // ============================================================================
 
 /**
+ * Default user ID for backward compatibility when userId is not provided
+ */
+const DEFAULT_USER_ID = 'default';
+
+/**
+ * Get effective userId, falling back to default for backward compatibility
+ */
+function getEffectiveUserId(userId: string | undefined): string {
+  return userId || DEFAULT_USER_ID;
+}
+
+/**
  * Options for vault operations
  */
 interface VaultOperationOptions {
@@ -90,8 +102,10 @@ export class VaultManager {
 
   /**
    * Create a new vault
+   * @param userId - The ID of the user creating the vault (uses 'default' if undefined for dev mode)
    */
-  async createVault(input: NewVault, options?: VaultOperationOptions): Promise<Vault> {
+  async createVault(userId: string | undefined, input: NewVault, options?: VaultOperationOptions): Promise<Vault> {
+    const effectiveUserId = getEffectiveUserId(userId);
     const now = new Date().toISOString();
     const vaultId = this.generateId('vault');
 
@@ -103,6 +117,7 @@ export class VaultManager {
       metadata: {
         createdAt: now,
         updatedAt: now,
+        ownerId: effectiveUserId,
         ...input.metadata
       }
     };
@@ -113,7 +128,7 @@ export class VaultManager {
     // Add sections if provided (don't push - addSection already does)
     if (input.sections) {
       for (const sectionInput of input.sections) {
-        await this.addSection(vault.id, sectionInput, { persistToObsidian: false });
+        await this.addSection(userId, vault.id, sectionInput, { persistToObsidian: false });
       }
     }
 
@@ -127,8 +142,12 @@ export class VaultManager {
 
   /**
    * Get a vault by ID
+   * @param userId - The ID of the user requesting the vault (uses 'default' if undefined for dev mode)
+   * Returns null if vault doesn't exist or user doesn't own it (returns 404 for both to prevent enumeration)
    */
-  async getVault(vaultId: string): Promise<Vault | null> {
+  async getVault(userId: string | undefined, vaultId: string): Promise<Vault | null> {
+    const effectiveUserId = getEffectiveUserId(userId);
+
     // Try memory first
     let vault: Vault | null | undefined = this.vaults.get(vaultId);
 
@@ -140,27 +159,41 @@ export class VaultManager {
       }
     }
 
+    // Check ownership - return null for non-owned vaults (same as not found)
+    if (vault && vault.metadata.ownerId && vault.metadata.ownerId !== effectiveUserId) {
+      return null;
+    }
+
     return vault || null;
   }
 
   /**
-   * Get all vaults
+   * Get all vaults for a user
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
-  async getAllVaults(): Promise<Vault[]> {
+  async getAllVaults(userId: string | undefined): Promise<Vault[]> {
+    const effectiveUserId = getEffectiveUserId(userId);
+
     // Load all vaults from Obsidian
     await this.loadAllVaultsFromObsidian();
-    return Array.from(this.vaults.values());
+
+    // Filter by ownership
+    return Array.from(this.vaults.values()).filter(
+      v => !v.metadata.ownerId || v.metadata.ownerId === effectiveUserId
+    );
   }
 
   /**
    * Update a vault's profile
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
   async updateVaultProfile(
+    userId: string | undefined,
     vaultId: string,
     profile: Partial<VaultProfile>,
     options?: VaultOperationOptions
   ): Promise<Vault> {
-    const vault = await this.getVault(vaultId);
+    const vault = await this.getVault(userId, vaultId);
     if (!vault) {
       throw new Error(`Vault not found: ${vaultId}`);
     }
@@ -182,9 +215,10 @@ export class VaultManager {
 
   /**
    * Delete a vault
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
-  async deleteVault(vaultId: string): Promise<void> {
-    const vault = await this.getVault(vaultId);
+  async deleteVault(userId: string | undefined, vaultId: string): Promise<void> {
+    const vault = await this.getVault(userId, vaultId);
     if (!vault) {
       throw new Error(`Vault not found: ${vaultId}`);
     }
@@ -202,13 +236,15 @@ export class VaultManager {
 
   /**
    * Add a section to a vault
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
   async addSection(
+    userId: string | undefined,
     vaultId: string,
     input: NewVaultSection,
     options?: VaultOperationOptions
   ): Promise<VaultSection> {
-    const vault = await this.getVault(vaultId);
+    const vault = await this.getVault(userId, vaultId);
     if (!vault) {
       throw new Error(`Vault not found: ${vaultId}`);
     }
@@ -246,9 +282,10 @@ export class VaultManager {
 
   /**
    * Get a section by ID
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
-  async getSection(vaultId: string, sectionId: string): Promise<VaultSection | null> {
-    const vault = await this.getVault(vaultId);
+  async getSection(userId: string | undefined, vaultId: string, sectionId: string): Promise<VaultSection | null> {
+    const vault = await this.getVault(userId, vaultId);
     if (!vault) return null;
 
     return vault.sections.find(s => s.id === sectionId) || null;
@@ -256,9 +293,10 @@ export class VaultManager {
 
   /**
    * Get sections by type
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
-  async getSectionsByType(vaultId: string, type: SectionType): Promise<VaultSection[]> {
-    const vault = await this.getVault(vaultId);
+  async getSectionsByType(userId: string | undefined, vaultId: string, type: SectionType): Promise<VaultSection[]> {
+    const vault = await this.getVault(userId, vaultId);
     if (!vault) return [];
 
     return vault.sections.filter(s => s.type === type);
@@ -266,14 +304,16 @@ export class VaultManager {
 
   /**
    * Update a section
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
   async updateSection(
+    userId: string | undefined,
     vaultId: string,
     sectionId: string,
     updates: Partial<Pick<VaultSection, 'label' | 'displayOrder'>>,
     options?: VaultOperationOptions
   ): Promise<VaultSection> {
-    const vault = await this.getVault(vaultId);
+    const vault = await this.getVault(userId, vaultId);
     if (!vault) {
       throw new Error(`Vault not found: ${vaultId}`);
     }
@@ -301,13 +341,15 @@ export class VaultManager {
 
   /**
    * Delete a section
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
   async deleteSection(
+    userId: string | undefined,
     vaultId: string,
     sectionId: string,
     options?: VaultOperationOptions
   ): Promise<void> {
-    const vault = await this.getVault(vaultId);
+    const vault = await this.getVault(userId, vaultId);
     if (!vault) {
       throw new Error(`Vault not found: ${vaultId}`);
     }
@@ -334,14 +376,16 @@ export class VaultManager {
 
   /**
    * Add an object to a section
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
   async addObject<T extends SectionObjectMetadata>(
+    userId: string | undefined,
     vaultId: string,
     sectionId: string,
     input: NewSectionObject<T>,
     options?: VaultOperationOptions
   ): Promise<SectionObject<T>> {
-    const vault = await this.getVault(vaultId);
+    const vault = await this.getVault(userId, vaultId);
     if (!vault) {
       throw new Error(`Vault not found: ${vaultId}`);
     }
@@ -367,9 +411,10 @@ export class VaultManager {
 
   /**
    * Get an object by ID with full context
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
-  async getObject(vaultId: string, objectId: string): Promise<ObjectContext | null> {
-    const vault = await this.getVault(vaultId);
+  async getObject(userId: string | undefined, vaultId: string, objectId: string): Promise<ObjectContext | null> {
+    const vault = await this.getVault(userId, vaultId);
     if (!vault) return null;
 
     for (const section of vault.sections) {
@@ -384,14 +429,16 @@ export class VaultManager {
 
   /**
    * Update an object's metadata
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
   async updateObject<T extends SectionObjectMetadata>(
+    userId: string | undefined,
     vaultId: string,
     objectId: string,
     updates: Partial<Pick<SectionObject<T>, 'metadata' | 'displayOrder' | 'tags'>>,
     options?: VaultOperationOptions
   ): Promise<SectionObject<T>> {
-    const vault = await this.getVault(vaultId);
+    const vault = await this.getVault(userId, vaultId);
     if (!vault) {
       throw new Error(`Vault not found: ${vaultId}`);
     }
@@ -424,13 +471,15 @@ export class VaultManager {
 
   /**
    * Delete an object
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
   async deleteObject(
+    userId: string | undefined,
     vaultId: string,
     objectId: string,
     options?: VaultOperationOptions
   ): Promise<void> {
-    const vault = await this.getVault(vaultId);
+    const vault = await this.getVault(userId, vaultId);
     if (!vault) {
       throw new Error(`Vault not found: ${vaultId}`);
     }
@@ -461,14 +510,16 @@ export class VaultManager {
 
   /**
    * Add an item to an object
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
   async addItem(
+    userId: string | undefined,
     vaultId: string,
     objectId: string,
     input: NewVaultItem,
     options?: VaultOperationOptions
   ): Promise<VaultItem> {
-    const vault = await this.getVault(vaultId);
+    const vault = await this.getVault(userId, vaultId);
     if (!vault) {
       throw new Error(`Vault not found: ${vaultId}`);
     }
@@ -505,9 +556,10 @@ export class VaultManager {
 
   /**
    * Get an item by ID with full context
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
-  async getItem(vaultId: string, itemId: string): Promise<ItemContext | null> {
-    const vault = await this.getVault(vaultId);
+  async getItem(userId: string | undefined, vaultId: string, itemId: string): Promise<ItemContext | null> {
+    const vault = await this.getVault(userId, vaultId);
     if (!vault) return null;
 
     for (const section of vault.sections) {
@@ -524,14 +576,16 @@ export class VaultManager {
 
   /**
    * Update an item
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
   async updateItem(
+    userId: string | undefined,
     vaultId: string,
     itemId: string,
     updates: Partial<Pick<VaultItem, 'content' | 'displayOrder' | 'tags' | 'metrics'>>,
     options?: VaultOperationOptions
   ): Promise<VaultItem> {
-    const vault = await this.getVault(vaultId);
+    const vault = await this.getVault(userId, vaultId);
     if (!vault) {
       throw new Error(`Vault not found: ${vaultId}`);
     }
@@ -563,13 +617,15 @@ export class VaultManager {
 
   /**
    * Delete an item
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
   async deleteItem(
+    userId: string | undefined,
     vaultId: string,
     itemId: string,
     options?: VaultOperationOptions
   ): Promise<void> {
-    const vault = await this.getVault(vaultId);
+    const vault = await this.getVault(userId, vaultId);
     if (!vault) {
       throw new Error(`Vault not found: ${vaultId}`);
     }
@@ -602,9 +658,10 @@ export class VaultManager {
 
   /**
    * Query vault content with filters
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
-  async queryVault(vaultId: string, query: VaultQuery): Promise<VaultQueryResult[]> {
-    const vault = await this.getVault(vaultId);
+  async queryVault(userId: string | undefined, vaultId: string, query: VaultQuery): Promise<VaultQueryResult[]> {
+    const vault = await this.getVault(userId, vaultId);
     if (!vault) return [];
 
     const results: VaultQueryResult[] = [];
@@ -653,9 +710,10 @@ export class VaultManager {
 
   /**
    * Get all experience objects from a vault
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
-  async getExperienceObjects(vaultId: string): Promise<ObjectContext[]> {
-    const vault = await this.getVault(vaultId);
+  async getExperienceObjects(userId: string | undefined, vaultId: string): Promise<ObjectContext[]> {
+    const vault = await this.getVault(userId, vaultId);
     if (!vault) return [];
 
     const results: ObjectContext[] = [];
@@ -673,9 +731,10 @@ export class VaultManager {
 
   /**
    * Get all items with their context from a vault
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
-  async getAllItems(vaultId: string): Promise<ItemContext[]> {
-    const vault = await this.getVault(vaultId);
+  async getAllItems(userId: string | undefined, vaultId: string): Promise<ItemContext[]> {
+    const vault = await this.getVault(userId, vaultId);
     if (!vault) return [];
 
     const results: ItemContext[] = [];
@@ -697,9 +756,14 @@ export class VaultManager {
 
   /**
    * Parse and import a resume into a new vault
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
-  async parseAndImport(resumeText: string, sourceFile?: string): Promise<ParseResult> {
+  async parseAndImport(userId: string | undefined, resumeText: string, sourceFile?: string): Promise<ParseResult> {
+    const effectiveUserId = getEffectiveUserId(userId);
     const result = await this.parser.parseResume(resumeText, sourceFile);
+
+    // Set owner on imported vault
+    result.vault.metadata.ownerId = effectiveUserId;
 
     // Store the vault in memory
     this.vaults.set(result.vault.id, result.vault);

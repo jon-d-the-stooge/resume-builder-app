@@ -12,7 +12,7 @@ const router = Router();
 
 /**
  * GET /api/applications
- * List all applications with optional status filter
+ * List all applications for the authenticated user with optional status filter
  * Maps to IPC: applications-list
  */
 router.get('/', async (req: Request, res: Response) => {
@@ -29,8 +29,8 @@ router.get('/', async (req: Request, res: Response) => {
       return;
     }
 
-    const applications = applicationsStore.list(statusFilter);
-    const stats = applicationsStore.getStats();
+    const applications = applicationsStore.list(req.user?.id, statusFilter);
+    const stats = applicationsStore.getStats(req.user?.id);
 
     res.json({
       success: true,
@@ -48,12 +48,12 @@ router.get('/', async (req: Request, res: Response) => {
 
 /**
  * GET /api/applications/stats
- * Get application statistics
+ * Get application statistics for the authenticated user
  * Derived from IPC: applications-list (stats component)
  */
-router.get('/stats', async (_req: Request, res: Response) => {
+router.get('/stats', async (req: Request, res: Response) => {
   try {
-    const stats = applicationsStore.getStats();
+    const stats = applicationsStore.getStats(req.user?.id);
 
     res.json({
       success: true,
@@ -70,13 +70,13 @@ router.get('/stats', async (_req: Request, res: Response) => {
 
 /**
  * GET /api/applications/:id
- * Get a single application by ID
+ * Get a single application by ID (only if owned by authenticated user)
  * Maps to IPC: applications-get
  */
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const application = applicationsStore.get(id);
+    const application = applicationsStore.get(req.user?.id, id);
 
     if (!application) {
       res.status(404).json({
@@ -101,7 +101,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 
 /**
  * POST /api/applications
- * Save a new application
+ * Save a new application for the authenticated user
  * Maps to IPC: applications-save
  */
 router.post('/', async (req: Request, res: Response) => {
@@ -125,7 +125,7 @@ router.post('/', async (req: Request, res: Response) => {
       return;
     }
 
-    const application = applicationsStore.save({
+    const application = applicationsStore.save(req.user?.id, {
       jobTitle,
       company,
       jobDescription,
@@ -161,7 +161,7 @@ router.post('/', async (req: Request, res: Response) => {
 
 /**
  * PATCH /api/applications/:id
- * Update an existing application (status, notes)
+ * Update an existing application (only if owned by authenticated user)
  * Maps to IPC: applications-update
  */
 router.patch('/:id', async (req: Request, res: Response) => {
@@ -188,7 +188,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
       return;
     }
 
-    const application = applicationsStore.update(id, { status, notes });
+    const application = applicationsStore.update(req.user?.id, id, { status, notes });
 
     if (!application) {
       res.status(404).json({
@@ -213,13 +213,13 @@ router.patch('/:id', async (req: Request, res: Response) => {
 
 /**
  * DELETE /api/applications/:id
- * Delete an application
+ * Delete an application (only if owned by authenticated user)
  * Maps to IPC: applications-delete
  */
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const deleted = applicationsStore.delete(id);
+    const deleted = applicationsStore.delete(req.user?.id, id);
 
     if (!deleted) {
       res.status(404).json({

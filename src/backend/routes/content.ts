@@ -411,11 +411,11 @@ router.delete('/vault', async (req: Request, res: Response) => {
       return;
     }
 
-    const vaults = await vaultManager.getAllVaults();
+    const vaults = await vaultManager.getAllVaults(req.user?.id);
     let deletedCount = 0;
 
     for (const vault of vaults) {
-      await vaultManager.deleteVault(vault.id);
+      await vaultManager.deleteVault(req.user?.id, vault.id);
       deletedCount++;
     }
 

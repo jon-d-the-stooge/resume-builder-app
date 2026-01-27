@@ -16,14 +16,14 @@ const router = Router();
  * Get current settings with masked API keys
  * Maps to IPC: get-settings
  */
-router.get('/', async (_req: Request, res: Response) => {
+router.get('/', async (req: Request, res: Response) => {
   try {
     // Ensure store is initialized
-    if (!settingsStore.isReady()) {
-      await settingsStore.initialize();
+    if (!settingsStore.isReady(req.user?.id)) {
+      await settingsStore.initialize(req.user?.id);
     }
 
-    const maskedSettings = settingsStore.getMasked();
+    const maskedSettings = settingsStore.getMasked(req.user?.id);
 
     res.json({
       success: true,
@@ -46,8 +46,8 @@ router.get('/', async (_req: Request, res: Response) => {
 router.put('/', async (req: Request, res: Response) => {
   try {
     // Ensure store is initialized
-    if (!settingsStore.isReady()) {
-      await settingsStore.initialize();
+    if (!settingsStore.isReady(req.user?.id)) {
+      await settingsStore.initialize(req.user?.id);
     }
 
     const {
@@ -93,7 +93,7 @@ router.put('/', async (req: Request, res: Response) => {
     if (adzunaApiKey !== undefined) updates.adzunaApiKey = adzunaApiKey;
     if (maxIterations !== undefined) updates.maxIterations = maxIterations;
 
-    settingsStore.set(updates);
+    settingsStore.set(req.user?.id, updates);
 
     res.json({
       success: true
@@ -187,15 +187,15 @@ router.post('/validate-api-key', async (req: Request, res: Response) => {
  * Check if a valid API key is configured
  * Maps to IPC: check-api-key-configured
  */
-router.get('/api-key-status', async (_req: Request, res: Response) => {
+router.get('/api-key-status', async (req: Request, res: Response) => {
   try {
     // Ensure store is initialized
-    if (!settingsStore.isReady()) {
-      await settingsStore.initialize();
+    if (!settingsStore.isReady(req.user?.id)) {
+      await settingsStore.initialize(req.user?.id);
     }
 
-    const configured = settingsStore.hasValidKey();
-    const provider = settingsStore.getProvider();
+    const configured = settingsStore.hasValidKey(req.user?.id);
+    const provider = settingsStore.getProvider(req.user?.id);
 
     res.json({
       configured,
@@ -214,15 +214,15 @@ router.get('/api-key-status', async (_req: Request, res: Response) => {
  * GET /api/settings/job-search-credentials
  * Get job search API credentials status (without exposing actual keys)
  */
-router.get('/job-search-credentials', async (_req: Request, res: Response) => {
+router.get('/job-search-credentials', async (req: Request, res: Response) => {
   try {
     // Ensure store is initialized
-    if (!settingsStore.isReady()) {
-      await settingsStore.initialize();
+    if (!settingsStore.isReady(req.user?.id)) {
+      await settingsStore.initialize(req.user?.id);
     }
 
-    const adzuna = settingsStore.getAdzunaCredentials();
-    const jsearchKey = settingsStore.getJSearchApiKey();
+    const adzuna = settingsStore.getAdzunaCredentials(req.user?.id);
+    const jsearchKey = settingsStore.getJSearchApiKey(req.user?.id);
 
     res.json({
       success: true,
@@ -246,14 +246,14 @@ router.get('/job-search-credentials', async (_req: Request, res: Response) => {
  * DELETE /api/settings
  * Clear all settings (reset to defaults)
  */
-router.delete('/', async (_req: Request, res: Response) => {
+router.delete('/', async (req: Request, res: Response) => {
   try {
     // Ensure store is initialized
-    if (!settingsStore.isReady()) {
-      await settingsStore.initialize();
+    if (!settingsStore.isReady(req.user?.id)) {
+      await settingsStore.initialize(req.user?.id);
     }
 
-    settingsStore.clear();
+    settingsStore.clear(req.user?.id);
 
     res.json({
       success: true,

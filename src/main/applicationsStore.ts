@@ -34,6 +34,7 @@ export interface ApplicationMetadata {
 
 export interface Application {
   id: string;
+  userId?: string; // Owner of this application (for multi-user support)
   jobTitle: string;
   company: string;
   date: string;
@@ -48,6 +49,7 @@ export interface Application {
 
 export interface ApplicationSummary {
   id: string;
+  userId?: string; // Owner of this application (for multi-user support)
   jobTitle: string;
   company: string;
   date: string;
@@ -60,6 +62,18 @@ export interface ApplicationSummary {
 // ============================================================================
 
 const APPLICATIONS_FOLDER = 'Applications';
+
+/**
+ * Default user ID for backward compatibility when userId is not provided
+ */
+const DEFAULT_USER_ID = 'default';
+
+/**
+ * Get effective userId, falling back to default for backward compatibility
+ */
+function getEffectiveUserId(userId: string | undefined): string {
+  return userId || DEFAULT_USER_ID;
+}
 
 // ============================================================================
 // Helper Functions
@@ -159,6 +173,7 @@ function generateMarkdown(app: Application): string {
   const frontmatter = `---
 type: application
 id: ${app.id}
+user_id: ${app.userId || ''}
 job_title: ${escapeYaml(app.jobTitle)}
 company: ${escapeYaml(app.company)}
 date: ${app.date}
@@ -205,6 +220,7 @@ function parseApplication(filePath: string): Application | null {
 
     return {
       id: frontmatter.id || path.basename(filePath, '.md'),
+      userId: frontmatter.user_id || undefined,
       jobTitle: frontmatter.job_title || '',
       company: frontmatter.company || '',
       date: frontmatter.date || '',
@@ -232,9 +248,11 @@ function parseApplication(filePath: string): Application | null {
 
 export const applicationsStore = {
   /**
-   * List all applications, optionally filtered by status
+   * List all applications for a user, optionally filtered by status
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
-  list: (statusFilter?: ApplicationStatus): ApplicationSummary[] => {
+  list: (userId: string | undefined, statusFilter?: ApplicationStatus): ApplicationSummary[] => {
+    const effectiveUserId = getEffectiveUserId(userId);
     const applicationsPath = getApplicationsPath();
     if (!applicationsPath || !fs.existsSync(applicationsPath)) {
       return [];
@@ -246,9 +264,12 @@ export const applicationsStore = {
     for (const file of files) {
       const app = parseApplication(path.join(applicationsPath, file));
       if (app) {
-        if (!statusFilter || app.status === statusFilter) {
+        // Filter by ownership - include if no userId set (legacy) or matches
+        const isOwned = !app.userId || app.userId === effectiveUserId;
+        if (isOwned && (!statusFilter || app.status === statusFilter)) {
           applications.push({
             id: app.id,
+            userId: app.userId,
             jobTitle: app.jobTitle,
             company: app.company,
             date: app.date,
@@ -268,8 +289,11 @@ export const applicationsStore = {
 
   /**
    * Get a single application by ID
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
+   * Returns null if not found or not owned (same response to prevent enumeration)
    */
-  get: (id: string): Application | null => {
+  get: (userId: string | undefined, id: string): Application | null => {
+    const effectiveUserId = getEffectiveUserId(userId);
     const applicationsPath = getApplicationsPath();
     if (!applicationsPath || !fs.existsSync(applicationsPath)) {
       return null;
@@ -281,6 +305,11 @@ export const applicationsStore = {
       const filePath = path.join(applicationsPath, file);
       const app = parseApplication(filePath);
       if (app && app.id === id) {
+        // Check ownership - return null for non-owned (same as not found)
+        if (app.userId && app.userId !== effectiveUserId) {
+          console.log(`[Applications] Application not found: ${id}`);
+          return null;
+        }
         console.log(`[Applications] Found application: ${id}`);
         return app;
       }
@@ -292,8 +321,9 @@ export const applicationsStore = {
 
   /**
    * Save a new application
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
-  save: (data: {
+  save: (userId: string | undefined, data: {
     jobTitle: string;
     company: string;
     jobDescription: string;
@@ -305,6 +335,7 @@ export const applicationsStore = {
       initialScore: number;
     };
   }): Application | null => {
+    const effectiveUserId = getEffectiveUserId(userId);
     const applicationsPath = ensureApplicationsFolder();
     if (!applicationsPath) {
       console.error('[Applications] Cannot save: vault path not configured');
@@ -316,6 +347,7 @@ export const applicationsStore = {
 
     const application: Application = {
       id,
+      userId: effectiveUserId,
       jobTitle: data.jobTitle,
       company: data.company,
       date: now.split('T')[0], // YYYY-MM-DD
@@ -343,11 +375,14 @@ export const applicationsStore = {
 
   /**
    * Update an existing application (status, notes)
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
+   * Returns null if not found or not owned
    */
-  update: (id: string, updates: {
+  update: (userId: string | undefined, id: string, updates: {
     status?: ApplicationStatus;
     notes?: string;
   }): Application | null => {
+    const effectiveUserId = getEffectiveUserId(userId);
     const applicationsPath = getApplicationsPath();
     if (!applicationsPath || !fs.existsSync(applicationsPath)) {
       return null;
@@ -360,6 +395,12 @@ export const applicationsStore = {
       const app = parseApplication(filePath);
 
       if (app && app.id === id) {
+        // Check ownership
+        if (app.userId && app.userId !== effectiveUserId) {
+          console.log(`[Applications] Application not found for update: ${id}`);
+          return null;
+        }
+
         // Apply updates
         if (updates.status !== undefined) {
           app.status = updates.status;
@@ -383,8 +424,11 @@ export const applicationsStore = {
 
   /**
    * Delete an application
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
+   * Returns false if not found or not owned
    */
-  delete: (id: string): boolean => {
+  delete: (userId: string | undefined, id: string): boolean => {
+    const effectiveUserId = getEffectiveUserId(userId);
     const applicationsPath = getApplicationsPath();
     if (!applicationsPath || !fs.existsSync(applicationsPath)) {
       return false;
@@ -397,6 +441,12 @@ export const applicationsStore = {
       const app = parseApplication(filePath);
 
       if (app && app.id === id) {
+        // Check ownership
+        if (app.userId && app.userId !== effectiveUserId) {
+          console.log(`[Applications] Application not found for deletion: ${id}`);
+          return false;
+        }
+
         fs.unlinkSync(filePath);
         console.log(`[Applications] Deleted application: ${id}`);
         return true;
@@ -408,14 +458,16 @@ export const applicationsStore = {
   },
 
   /**
-   * Get statistics about applications
+   * Get statistics about applications for a user
+   * @param userId - The ID of the user (uses 'default' if undefined for dev mode)
    */
-  getStats: (): {
+  getStats: (userId: string | undefined): {
     total: number;
     byStatus: Record<ApplicationStatus, number>;
     averageScore: number;
     recentCount: number; // Last 7 days
   } => {
+    const effectiveUserId = getEffectiveUserId(userId);
     const applicationsPath = getApplicationsPath();
     if (!applicationsPath || !fs.existsSync(applicationsPath)) {
       return {
@@ -445,12 +497,18 @@ export const applicationsStore = {
 
     let totalScore = 0;
     let recentCount = 0;
+    let validCount = 0;
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
     for (const file of files) {
       const app = parseApplication(path.join(applicationsPath, file));
       if (app) {
+        // Filter by ownership - include if no userId set (legacy) or matches
+        const isOwned = !app.userId || app.userId === effectiveUserId;
+        if (!isOwned) continue;
+
+        validCount++;
         byStatus[app.status]++;
         totalScore += app.score;
 
@@ -460,12 +518,10 @@ export const applicationsStore = {
       }
     }
 
-    const total = files.length;
-
     return {
-      total,
+      total: validCount,
       byStatus,
-      averageScore: total > 0 ? totalScore / total : 0,
+      averageScore: validCount > 0 ? totalScore / validCount : 0,
       recentCount
     };
   }

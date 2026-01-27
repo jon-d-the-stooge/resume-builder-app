@@ -66,11 +66,30 @@ const jwtCheck = !AUTH_DISABLED && AUTH0_DOMAIN && AUTH0_AUDIENCE
 
 /**
  * Development mock user for when AUTH_DISABLED=true
+ * Can be overridden via X-Dev-User-Id header for testing multi-user scenarios
  */
-const MOCK_USER: User = {
+const DEFAULT_MOCK_USER: User = {
   id: 'dev-user',
   email: 'dev@local',
 };
+
+/**
+ * Create a mock user from optional dev header overrides
+ * Only used when AUTH_DISABLED=true
+ */
+function getMockUser(req: Request): User {
+  const devUserId = req.headers['x-dev-user-id'] as string | undefined;
+  const devUserEmail = req.headers['x-dev-user-email'] as string | undefined;
+
+  if (devUserId) {
+    return {
+      id: devUserId,
+      email: devUserEmail || `${devUserId}@dev.local`,
+    };
+  }
+
+  return DEFAULT_MOCK_USER;
+}
 
 /**
  * Extract user information from Auth0 JWT payload
@@ -103,8 +122,9 @@ export const authenticateRequest = (
   next: NextFunction
 ): void => {
   // Development bypass - mock user when AUTH_DISABLED=true
+  // Supports X-Dev-User-Id header for testing multi-user isolation
   if (AUTH_DISABLED) {
-    req.user = MOCK_USER;
+    req.user = getMockUser(req);
     next();
     return;
   }

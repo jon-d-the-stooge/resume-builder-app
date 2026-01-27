@@ -272,6 +272,7 @@ export interface VaultMetadata {
   sourceFile?: string; // Original resume filename
   parseConfidence?: number; // 0.0-1.0
   lastOptimizedAt?: string;
+  ownerId?: string; // User who owns this vault (for multi-user support)
 }
 
 /**
