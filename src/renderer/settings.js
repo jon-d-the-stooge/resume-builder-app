@@ -3,8 +3,8 @@
  * Handles API key configuration and LLM provider selection
  */
 
-// Use Electron's IPC for communication with main process
-const { ipcRenderer } = require('electron');
+// Use IPC adapter for web/Electron compatibility
+const { ipcRenderer } = require('./api/ipcAdapter');
 
 // DOM Elements
 const form = document.getElementById('settingsForm');

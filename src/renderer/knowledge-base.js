@@ -5,7 +5,7 @@
  * optimized resumes and their analysis data.
  */
 
-const { ipcRenderer } = require('electron');
+const { ipcRenderer } = require('./api/ipcAdapter');
 
 // ============================================================================
 // State

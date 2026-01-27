@@ -1,5 +1,5 @@
 // Content item editor UI logic
-const { ipcRenderer } = require('electron');
+const { ipcRenderer } = require('./api/ipcAdapter');
 
 // DOM elements
 const loadingState = document.getElementById('loadingState');

@@ -1,5 +1,5 @@
 // Career Agent Chat UI Logic
-const { ipcRenderer } = require('electron');
+const { ipcRenderer } = require('./api/ipcAdapter');
 
 // DOM Elements
 const messagesList = document.getElementById('messagesList');
@@ -355,7 +355,7 @@ function showVaultActionsSummary(actions) {
           link.textContent = site;
           link.onclick = function(e) {
             e.preventDefault();
-            require('electron').shell.openExternal(url);
+            window.open(url, '_blank', 'noopener,noreferrer');
           };
           linksDiv.appendChild(link);
         }
@@ -464,7 +464,7 @@ function createJobCard(job) {
     viewBtn.className = 'job-action-btn view';
     viewBtn.textContent = 'View Job';
     viewBtn.onclick = function() {
-      require('electron').shell.openExternal(job.sourceUrl);
+      window.open(job.sourceUrl, '_blank', 'noopener,noreferrer');
     };
     actionsDiv.appendChild(viewBtn);
   }

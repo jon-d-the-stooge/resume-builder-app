@@ -1,5 +1,5 @@
 // Manual content entry UI logic
-const { ipcRenderer } = require('electron');
+const { ipcRenderer } = require('./api/ipcAdapter');
 
 // DOM elements
 const form = document.getElementById('manualEntryForm');

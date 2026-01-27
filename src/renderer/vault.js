@@ -1,5 +1,5 @@
 // Resume Vault UI Logic
-const { ipcRenderer } = require('electron');
+const { ipcRenderer } = require('./api/ipcAdapter');
 
 // DOM Elements
 const totalItems = document.getElementById('totalItems');

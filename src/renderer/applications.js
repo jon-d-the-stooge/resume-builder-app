@@ -4,7 +4,7 @@
  * Handles displaying, filtering, and managing saved resume optimizations.
  */
 
-const { ipcRenderer } = require('electron');
+const { ipcRenderer } = require('./api/ipcAdapter');
 
 // ============================================================================
 // DOM Elements

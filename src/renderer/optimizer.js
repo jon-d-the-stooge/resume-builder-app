@@ -5,7 +5,7 @@
  * and UI updates for the resume optimizer screen.
  */
 
-const { ipcRenderer } = require('electron');
+const { ipcRenderer } = require('./api/ipcAdapter');
 
 // ============================================================================
 // State Management

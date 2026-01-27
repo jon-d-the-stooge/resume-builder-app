@@ -1,5 +1,5 @@
 // Job Queue UI Logic
-const { ipcRenderer } = require('electron');
+const { ipcRenderer } = require('./api/ipcAdapter');
 
 // DOM Elements
 const pendingCount = document.getElementById('pendingCount');

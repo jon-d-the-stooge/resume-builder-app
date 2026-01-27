@@ -1,5 +1,5 @@
 // Content review UI logic
-const { ipcRenderer } = require('electron');
+const { ipcRenderer } = require('./api/ipcAdapter');
 
 // State
 let parsedData = null;

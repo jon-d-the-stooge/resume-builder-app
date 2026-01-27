@@ -1,5 +1,5 @@
 // Job Search UI Logic
-const { ipcRenderer } = require('electron');
+const { ipcRenderer } = require('./api/ipcAdapter');
 
 // DOM Elements
 const searchTitle = document.getElementById('searchTitle');
