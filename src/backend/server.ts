@@ -20,6 +20,9 @@ import adminRouter from './routes/admin';
 import usageRouter from './routes/usage';
 import { rateLimiter } from './middleware/rateLimiter';
 import { authenticateRequest } from './middleware/auth';
+import { requestLogger } from './middleware/requestLogger';
+import { errorHandler } from './middleware/errorHandler';
+import { logger } from './logger';
 
 const app: Application = express();
 
@@ -42,6 +45,7 @@ const corsOptions: cors.CorsOptions = {
 // Middleware
 app.use(cors(corsOptions));
 app.use(express.json());
+app.use(requestLogger);
 
 // Health check endpoint (unauthenticated - for load balancers/monitoring)
 app.get('/api/health', (req, res) => {
@@ -67,10 +71,16 @@ app.use('/api/ai', rateLimiter, aiRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/usage', usageRouter);
 
+// Error handling middleware (must be last)
+app.use(errorHandler);
+
 // Start function
 export const start = (): void => {
   app.listen(config.server.port, () => {
-    console.log(`Server listening on port ${config.server.port}`);
+    logger.info(
+      { port: config.server.port, env: config.server.nodeEnv },
+      'Server started'
+    );
   });
 };
 

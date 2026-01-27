@@ -6,7 +6,10 @@
 
 import { Router, Request, Response } from 'express';
 import { jobQueue, queueProcessor, settingsStore } from '../services';
+import { loggers } from '../logger';
 import type { JobStatus, QueueJobInput } from '../../main/jobQueue';
+
+const jobLogger = loggers.jobs;
 
 const router = Router();
 
@@ -54,6 +57,11 @@ router.post('/', async (req: Request, res: Response) => {
 
     const job = await jobQueue.enqueue(input);
 
+    jobLogger.info(
+      { jobId: job.id, company: job.company, title: job.title, priority: job.priority },
+      'Job enqueued'
+    );
+
     res.status(201).json({
       success: true,
       job: {
@@ -66,7 +74,7 @@ router.post('/', async (req: Request, res: Response) => {
       }
     });
   } catch (error) {
-    console.error('Error creating job:', error);
+    jobLogger.error({ err: error }, 'Failed to create job');
     res.status(500).json({
       error: 'Failed to create job',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -112,7 +120,7 @@ router.get('/', async (req: Request, res: Response) => {
       status: jobQueue.getStatus()
     });
   } catch (error) {
-    console.error('Error listing jobs:', error);
+    jobLogger.error({ err: error }, 'Failed to list jobs');
     res.status(500).json({
       error: 'Failed to list jobs',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -164,7 +172,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       } : null
     });
   } catch (error) {
-    console.error('Error getting job:', error);
+    jobLogger.error({ err: error }, 'Failed to get job');
     res.status(500).json({
       error: 'Failed to get job',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -193,7 +201,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
 
     res.status(204).send();
   } catch (error) {
-    console.error('Error cancelling job:', error);
+    jobLogger.error({ err: error }, 'Failed to cancel job');
     res.status(500).json({
       error: 'Failed to cancel job',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -306,11 +314,11 @@ router.post('/optimize', async (req: Request, res: Response) => {
     // Start processing asynchronously (fire and forget)
     // This dequeues the job, processes it, and updates its status
     processJobAsync(job.id).catch(err => {
-      console.error(`Async job processing error for ${job.id}:`, err);
+      jobLogger.error({ err, jobId: job.id }, 'Async job processing error');
     });
 
   } catch (error) {
-    console.error('Error queuing optimization job:', error);
+    jobLogger.error({ err: error }, 'Failed to queue optimization job');
     res.status(500).json({
       error: 'Failed to queue optimization job',
       message: error instanceof Error ? error.message : 'Unknown error'
@@ -333,17 +341,35 @@ async function processJobAsync(jobId: string): Promise<void> {
   // Mark as processing via dequeue
   const dequeuedJob = await jobQueue.dequeue();
   if (!dequeuedJob || dequeuedJob.id !== jobId) {
-    console.error(`Failed to dequeue job ${jobId} - got ${dequeuedJob?.id || 'null'}`);
+    jobLogger.error(
+      { jobId, dequeuedId: dequeuedJob?.id || null },
+      'Failed to dequeue job - ID mismatch'
+    );
     return;
   }
 
+  const startTime = Date.now();
+
   try {
-    console.log(`Processing optimization job: ${dequeuedJob.title} at ${dequeuedJob.company}`);
+    jobLogger.info(
+      { jobId, company: dequeuedJob.company, title: dequeuedJob.title },
+      'Job processing started'
+    );
+
     const result = await queueProcessor.processJob(dequeuedJob);
     await jobQueue.completeJob(jobId, result);
-    console.log(`Completed job ${jobId} with score: ${result.finalScore.toFixed(2)}`);
+
+    const duration = Date.now() - startTime;
+    jobLogger.info(
+      { jobId, score: result.finalScore, durationMs: duration },
+      'Job completed successfully'
+    );
   } catch (error) {
-    console.error(`Failed to process job ${jobId}:`, error);
+    const duration = Date.now() - startTime;
+    jobLogger.error(
+      { err: error, jobId, durationMs: duration },
+      'Job processing failed'
+    );
     await jobQueue.failJob(jobId, (error as Error).message);
   }
 }
