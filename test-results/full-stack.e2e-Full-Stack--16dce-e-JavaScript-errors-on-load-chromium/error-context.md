@@ -1,0 +1,124 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - navigation [ref=e2]:
+    - generic [ref=e3]:
+      - link "R Resume Optimizer" [ref=e4] [cursor=pointer]:
+        - /url: ./index.html
+        - generic [ref=e5]: R
+        - text: Resume Optimizer
+      - generic [ref=e6]:
+        - link "Dashboard" [ref=e7] [cursor=pointer]:
+          - /url: ./index.html
+        - link "Optimizer" [ref=e8] [cursor=pointer]:
+          - /url: ./optimizer.html
+        - link "Queue" [ref=e9] [cursor=pointer]:
+          - /url: ./queue.html
+        - link "Chat" [ref=e10] [cursor=pointer]:
+          - /url: ./chat.html
+        - link "Job Search" [ref=e11] [cursor=pointer]:
+          - /url: ./job-search.html
+        - link "Vault" [ref=e12] [cursor=pointer]:
+          - /url: ./vault.html
+        - link "Knowledge Base" [ref=e13] [cursor=pointer]:
+          - /url: ./knowledge-base.html
+      - link "⚙" [ref=e14] [cursor=pointer]:
+        - /url: ./settings.html
+  - main [ref=e15]:
+    - generic [ref=e16]:
+      - heading "Dashboard" [level=1] [ref=e17]
+      - paragraph [ref=e18]: Your resume optimization command center
+    - generic [ref=e19]:
+      - generic [ref=e20]:
+        - generic [ref=e21]:
+          - generic [ref=e22]:
+            - generic [ref=e23]: 👤
+            - heading "Profile Status" [level=2] [ref=e24]
+          - generic [ref=e25]: Loading...
+        - generic [ref=e26]:
+          - generic [ref=e27]: Loading vault path...
+          - generic [ref=e28]:
+            - generic [ref=e29]:
+              - generic [ref=e30]: "-"
+              - generic [ref=e31]: Job Entries
+            - generic [ref=e32]:
+              - generic [ref=e33]: "-"
+              - generic [ref=e34]: Skills
+            - generic [ref=e35]:
+              - generic [ref=e36]: "-"
+              - generic [ref=e37]: Accomplishments
+        - generic [ref=e38]:
+          - button "Upload Resume" [ref=e39] [cursor=pointer]
+          - link "View Vault" [ref=e40] [cursor=pointer]:
+            - /url: ./vault.html
+      - generic [ref=e41]:
+        - generic [ref=e43]:
+          - generic [ref=e44]: ⚡
+          - heading "Quick Optimize" [level=2] [ref=e45]
+        - generic [ref=e46]:
+          - paragraph [ref=e47]: Optimize your resume for a specific job posting. Paste a job URL or description to get started.
+          - textbox "Paste job URL or title..." [ref=e49]
+          - textbox "Or paste the job description here..." [ref=e51]
+        - button "Optimize Resume" [ref=e53] [cursor=pointer]
+      - generic [ref=e54]:
+        - generic [ref=e55]:
+          - generic [ref=e56]:
+            - generic [ref=e57]: 📋
+            - heading "Job Queue" [level=2] [ref=e58]
+          - generic [ref=e59]: 0 pending
+        - generic [ref=e62]:
+          - generic [ref=e63]: 📄
+          - generic [ref=e64]: No jobs in queue
+        - generic [ref=e65]:
+          - button "Process All" [disabled] [ref=e66]
+          - link "Manage Queue" [ref=e67] [cursor=pointer]:
+            - /url: ./queue.html
+      - generic [ref=e68]:
+        - generic [ref=e70]:
+          - generic [ref=e71]: 💬
+          - heading "Career Agent" [level=2] [ref=e72]
+        - generic [ref=e73]:
+          - paragraph [ref=e75]: "\"Hi! I'm your career agent. I can help with job searching, interview prep, salary negotiation, and career advice. What would you like to work on?\""
+          - generic [ref=e76]:
+            - button "Find Jobs" [ref=e77] [cursor=pointer]
+            - button "Interview Prep" [ref=e78] [cursor=pointer]
+            - button "Salary Advice" [ref=e79] [cursor=pointer]
+        - link "Start Conversation" [ref=e81] [cursor=pointer]:
+          - /url: ./chat.html
+      - generic [ref=e82]:
+        - generic [ref=e84]:
+          - generic [ref=e85]: 🔍
+          - heading "Job Search" [level=2] [ref=e86]
+        - generic [ref=e87]:
+          - paragraph [ref=e88]: Search across multiple job boards and company career pages. Find opportunities that match your profile.
+          - textbox "Job title or keywords..." [ref=e90]
+          - textbox "Location (optional)" [ref=e92]
+        - button "Search Jobs" [ref=e94] [cursor=pointer]
+      - generic [ref=e95]:
+        - generic [ref=e97]:
+          - generic [ref=e98]: 📈
+          - heading "Recent Optimizations" [level=2] [ref=e99]
+        - list [ref=e101]:
+          - generic [ref=e102]:
+            - generic [ref=e103]: 📊
+            - generic [ref=e104]: No recent optimizations
+        - link "View All Results" [ref=e106] [cursor=pointer]:
+          - /url: ./queue.html
+      - generic [ref=e107]:
+        - generic [ref=e109]:
+          - generic [ref=e110]: 📚
+          - heading "Knowledge Base" [level=2] [ref=e111]
+        - generic [ref=e113]:
+          - generic [ref=e114]:
+            - generic [ref=e115]: "0"
+            - generic [ref=e116]: Resumes
+          - generic [ref=e117]:
+            - generic [ref=e118]: 0%
+            - generic [ref=e119]: Avg Score
+          - generic [ref=e120]:
+            - generic [ref=e121]: "0"
+            - generic [ref=e122]: This Week
+        - link "Browse Knowledge Base" [ref=e124] [cursor=pointer]:
+          - /url: ./knowledge-base.html
+```

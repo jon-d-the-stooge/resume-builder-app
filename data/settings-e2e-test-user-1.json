@@ -1,0 +1,9 @@
+{
+  "llmProvider": "anthropic",
+  "anthropicApiKey": "",
+  "openaiApiKey": "",
+  "adzunaAppId": "",
+  "adzunaApiKey": "",
+  "jsearchApiKey": "",
+  "maxIterations": 7
+}
