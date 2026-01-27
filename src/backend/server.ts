@@ -4,8 +4,8 @@
  * This will serve as the web-based API alternative to Electron IPC.
  */
 
-// Load environment variables first, before any other imports
-import 'dotenv/config';
+// Load and validate environment configuration (fails fast on missing required vars)
+import { config } from './config';
 
 import express, { Application } from 'express';
 import cors from 'cors';
@@ -69,9 +69,8 @@ app.use('/api/usage', usageRouter);
 
 // Start function
 export const start = (): void => {
-  const PORT = process.env.PORT || 3001;
-  app.listen(PORT, () => {
-    console.log(`Server listening on port ${PORT}`);
+  app.listen(config.server.port, () => {
+    console.log(`Server listening on port ${config.server.port}`);
   });
 };
 
