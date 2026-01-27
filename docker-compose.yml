@@ -1,0 +1,63 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - DATA_DIR=/app/data
+      # Authentication (set AUTH_DISABLED=false for production with Auth0)
+      - AUTH_DISABLED=${AUTH_DISABLED:-true}
+      - AUTH0_DOMAIN=${AUTH0_DOMAIN:-}
+      - AUTH0_AUDIENCE=${AUTH0_AUDIENCE:-}
+      # LLM API Keys
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - LLM_PROVIDER=${LLM_PROVIDER:-anthropic}
+      # RapidAPI
+      - RAPIDAPI_KEY=${RAPIDAPI_KEY:-}
+      # Database (uncomment DATABASE_URL for Postgres)
+      # - DATABASE_URL=postgresql://resume_user:resume_pass@postgres:5432/resume_db
+    volumes:
+      # Persist SQLite data
+      - resume_data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    # Uncomment to use Postgres instead of SQLite
+    # depends_on:
+    #   postgres:
+    #     condition: service_healthy
+
+  # Optional: PostgreSQL database (activate with --profile postgres)
+  postgres:
+    image: postgres:16-alpine
+    profiles:
+      - postgres
+    environment:
+      - POSTGRES_USER=resume_user
+      - POSTGRES_PASSWORD=resume_pass
+      - POSTGRES_DB=resume_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U resume_user -d resume_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  resume_data:
+    driver: local
+  postgres_data:
+    driver: local

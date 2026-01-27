@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": [
+    "src/backend/**/*",
+    "src/shared/**/*",
+    "src/ats-agent/**/*",
+    "src/agents/**/*",
+    "src/main/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/renderer/**/*",
+    "src/tests/**/*"
+  ]
+}
