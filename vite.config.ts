@@ -50,7 +50,18 @@ export default defineConfig({
         applications: resolve(__dirname, 'src/renderer/applications.html'),
         knowledgeBase: resolve(__dirname, 'src/renderer/knowledge-base.html'),
       },
+      // Exclude Electron and related packages from the web bundle
+      external: [
+        'electron',
+        'electron-store',
+        '@electron/remote',
+      ],
     },
+  },
+
+  // Optimize dependencies - exclude Electron-specific packages
+  optimizeDeps: {
+    exclude: ['electron', 'electron-store'],
   },
 
   test: {
