@@ -2,19 +2,20 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": "./src"
+    "rootDir": "./src",
+    "skipLibCheck": true
   },
   "include": [
     "src/backend/**/*",
-    "src/shared/**/*",
-    "src/ats-agent/**/*",
-    "src/agents/**/*",
-    "src/main/**/*"
+    "src/shared/**/*"
   ],
   "exclude": [
     "node_modules",
     "dist",
     "src/renderer/**/*",
-    "src/tests/**/*"
+    "src/tests/**/*",
+    "src/main/**/*",
+    "src/ats-agent/**/*",
+    "src/agents/**/*"
   ]
 }

@@ -1,19 +1,22 @@
 /**
- * Services index - re-exports service modules from main/ for use by backend routes.
+ * Services index - re-exports service modules from shared/services/ for use by backend routes.
  * This provides a clean abstraction layer between the Express routes
- * and the core business logic implemented in the main process modules.
+ * and the core business logic implemented in the shared modules.
+ *
+ * NOTE: All services are imported from src/shared/services/ which contains
+ * NO Electron dependencies, making them safe for web/Docker deployment.
  */
 
-export { vaultManager } from '../../main/vaultManager';
-export { jobQueue } from '../../main/jobQueue';
-export { queueProcessor } from '../../main/queueProcessor';
-export { applicationsStore } from '../../main/applicationsStore';
-export { knowledgeBaseStore } from '../../main/knowledgeBaseStore';
-export { settingsStore } from '../../main/settingsStore';
-export { contentManager } from '../../main/contentManager';
-export { ResumeParser } from '../../main/resumeParser';
-export { csvImporter } from '../../main/csvImporter';
-export { markdownGenerator } from '../../main/markdownGenerator';
+export { vaultManager } from '../../shared/services/vaultManager';
+export { jobQueue } from '../../shared/services/jobQueue';
+export { queueProcessor } from '../../shared/services/queueProcessor';
+export { applicationsStore } from '../../shared/services/applicationsStore';
+export { knowledgeBaseStore } from '../../shared/services/knowledgeBaseStore';
+export { settingsStore } from '../../shared/services/settingsStore';
+export { contentManager } from '../../shared/services/contentManager';
+export { ResumeParser } from '../../shared/services/resumeParser';
+export { csvImporter } from '../../shared/services/csvImporter';
+export { markdownGenerator } from '../../shared/services/markdownGenerator';
 
 // API proxy services for external API calls
 export { llmProxy, rapidAPIProxy, LLMProxy, RapidAPIProxy } from './apiProxy';

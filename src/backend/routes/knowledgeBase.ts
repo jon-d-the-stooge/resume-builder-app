@@ -344,7 +344,7 @@ router.get('/:id/export', async (req: Request, res: Response) => {
     const { id } = req.params;
     const format = (req.query.format as string) || 'md';
 
-    const entry = knowledgeBaseStore.get(req.user?.id, id);
+    const entry = await knowledgeBaseStore.get(req.user?.id, id);
 
     if (!entry) {
       res.status(404).json({
