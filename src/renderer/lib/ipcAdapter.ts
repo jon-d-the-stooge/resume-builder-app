@@ -737,16 +737,21 @@ const handlers: HandlerRegistry = {
   },
 
   'optimizer-optimize': async (params: unknown) => {
+    console.log('OPTIMIZE IPC: received', params);
     const { jobPosting } = params as {
       jobPosting: { company: string; title: string; description: string };
     };
+    console.log('OPTIMIZE IPC: calling api.jobs.optimize');
     const result = await api.jobs.optimize({
       company: jobPosting.company,
       title: jobPosting.title,
       description: jobPosting.description,
     });
+    console.log('OPTIMIZE IPC: job created', result);
+    console.log('OPTIMIZE IPC: waiting for completion');
     // Wait for completion and return result
     const completed = await api.jobs.waitForCompletion(result.jobId);
+    console.log('OPTIMIZE IPC: completed', completed);
     return {
       success: completed.job.status === 'completed',
       data: completed.result,

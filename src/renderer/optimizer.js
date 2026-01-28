@@ -246,6 +246,8 @@ function updateOptimizeButtonState() {
 async function handleOptimize() {
   if (state.isOptimizing) return;
 
+  console.log('OPTIMIZE: button clicked');
+
   try {
     state.isOptimizing = true;
     hideError();
@@ -272,6 +274,10 @@ async function handleOptimize() {
       format: 'markdown'
     };
 
+    console.log('OPTIMIZE: jobPosting=', jobPosting);
+    console.log('OPTIMIZE: resume length=', resume?.length);
+    console.log('OPTIMIZE: resume content length=', resume?.content?.length);
+
     const result = await ipcRenderer.invoke('optimizer-optimize', {
       jobPosting,
       resume
@@ -279,7 +285,17 @@ async function handleOptimize() {
 
     if (result.success) {
       state.results = result.data;
-      displayResults(result.data);
+      const isQueueResult = result.data && typeof result.data.finalScore === 'number';
+      if (isQueueResult) {
+        displayQueueJobResults({
+          title: jobPosting.title,
+          company: jobPosting.company,
+          description: jobPosting.description,
+          result: result.data
+        });
+      } else {
+        displayResults(result.data);
+      }
 
       // Auto-save to Applications on successful optimization
       await saveToApplications(result.data);
@@ -1136,15 +1152,28 @@ async function startOptimizerWorkflow() {
  */
 async function saveToApplications(results) {
   try {
+    const generatedResume =
+      results.finalResume?.content ||
+      results.optimizedContent ||
+      '';
+    const finalScore = results.finalFit ?? results.finalScore ?? 0;
+    const initialScore = results.initialFit ?? results.previousScore ?? 0;
+    const iterations = results.iterations?.length || results.iterations || 1;
+
+    if (!generatedResume.trim()) {
+      console.warn('[Optimizer] Skipping Applications save: generated resume is empty');
+      return;
+    }
+
     const saveResult = await ipcRenderer.invoke('applications-save', {
       jobTitle: elements.jobTitle.value.trim() || 'Job Position',
       company: elements.jobCompany.value.trim() || 'Unknown Company',
       jobDescription: elements.jobDescription.value.trim(),
-      generatedResume: results.finalResume?.content || '',
-      score: results.finalFit || 0,
+      generatedResume,
+      score: finalScore,
       metadata: {
-        iterations: results.iterations?.length || 1,
-        initialScore: results.initialFit || 0
+        iterations,
+        initialScore
       }
     });
 
@@ -1168,20 +1197,43 @@ async function saveToKnowledgeBase(results) {
     // Extract analysis data from the last iteration
     const lastIteration = results.iterations?.slice(-1)[0];
     const analysis = lastIteration?.analysis || {};
+    const optimizedResume =
+      results.finalResume?.content ||
+      results.optimizedContent ||
+      '';
+    const finalScore = results.finalFit ?? results.finalScore ?? 0;
+    const initialScore = results.initialFit ?? results.previousScore ?? 0;
+    const iterations = results.iterations?.length || results.iterations || 1;
+    const matchedSkills = results.matchedSkills || [];
+    const missingSkills = results.missingSkills || results.gaps || [];
+    const strengths = Array.isArray(analysis.strengths) && analysis.strengths.length > 0
+      ? analysis.strengths
+      : matchedSkills.map(skill => skill.name || skill);
+    const gaps = Array.isArray(analysis.gaps) && analysis.gaps.length > 0
+      ? analysis.gaps
+      : missingSkills.map(gap => gap.name || gap);
+    const recommendations = (analysis.recommendations && analysis.recommendations.length > 0)
+      ? analysis.recommendations
+      : (results.recommendations || []);
+
+    if (!optimizedResume.trim()) {
+      console.warn('[Optimizer] Skipping Knowledge Base save: optimized resume is empty');
+      return;
+    }
 
     const entry = {
       jobTitle: elements.jobTitle.value.trim() || 'Job Position',
       company: elements.jobCompany.value.trim() || 'Unknown Company',
       jobDescription: elements.jobDescription.value.trim(),
       sourceUrl: state.job?.sourceUrl || null,
-      optimizedResume: results.finalResume?.content || '',
+      optimizedResume,
       analysis: {
-        finalScore: results.finalFit || 0,
-        initialScore: results.initialFit || 0,
-        iterations: results.iterations?.length || 1,
-        strengths: analysis.strengths || [],
-        gaps: analysis.gaps || [],
-        recommendations: (analysis.recommendations || []).map(rec => {
+        finalScore,
+        initialScore,
+        iterations,
+        strengths,
+        gaps,
+        recommendations: recommendations.map(rec => {
           // Handle both string and object formats
           if (typeof rec === 'string') {
             return { priority: 'medium', suggestion: rec };

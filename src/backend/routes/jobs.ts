@@ -222,6 +222,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
  */
 router.post('/optimize', async (req: Request, res: Response) => {
   try {
+    console.log('OPTIMIZE ROUTE: received');
     // Check API key first
     if (!settingsStore.hasValidKey()) {
       res.status(401).json({
@@ -299,6 +300,7 @@ router.post('/optimize', async (req: Request, res: Response) => {
       job = await jobQueue.enqueue(input);
     }
 
+    console.log('OPTIMIZE ROUTE: starting job');
     // Return job ID immediately - processing happens asynchronously
     // The frontend should poll GET /api/jobs/:id to check status
     res.status(202).json({
@@ -329,24 +331,180 @@ router.post('/optimize', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/jobs/process-next
+ * Process the next pending job in the queue (synchronous)
+ * Mirrors IPC: job-queue-process-next
+ */
+router.post('/process-next', async (req: Request, res: Response) => {
+  try {
+    if (!settingsStore.hasValidKey()) {
+      res.status(401).json({
+        success: false,
+        error: 'API key not configured. Please set your API key in Settings.'
+      });
+      return;
+    }
+
+    await jobQueue.initialize();
+    const job = await jobQueue.dequeue();
+
+    if (!job) {
+      res.json({ success: false, message: 'No pending jobs in queue' });
+      return;
+    }
+
+    try {
+      const result = await queueProcessor.processJob(job);
+      await jobQueue.completeJob(job.id, result);
+
+      res.json({
+        success: true,
+        job: {
+          id: job.id,
+          title: job.title,
+          company: job.company,
+          status: 'completed'
+        },
+        result: {
+          finalScore: result.finalScore,
+          matchedSkills: result.matchedSkills.length,
+          gaps: result.gaps.length,
+          recommendations: result.recommendations.length
+        }
+      });
+    } catch (error) {
+      await jobQueue.failJob(job.id, (error as Error).message);
+      res.json({
+        success: false,
+        job: {
+          id: job.id,
+          title: job.title,
+          company: job.company,
+          status: 'failed'
+        },
+        error: (error as Error).message
+      });
+    }
+  } catch (error) {
+    jobLogger.error({ err: error }, 'Failed to process next job');
+    res.status(500).json({
+      success: false,
+      error: 'Failed to process next job',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
+ * POST /api/jobs/process-all
+ * Process all pending jobs in the queue (synchronous)
+ * Mirrors IPC: job-queue-process-all
+ */
+router.post('/process-all', async (req: Request, res: Response) => {
+  try {
+    if (!settingsStore.hasValidKey()) {
+      res.status(401).json({
+        success: false,
+        error: 'API key not configured. Please set your API key in Settings.',
+        results: [],
+        summary: { processed: 0, succeeded: 0, failed: 0 }
+      });
+      return;
+    }
+
+    await jobQueue.initialize();
+    const results: Array<{
+      jobId: string;
+      title: string;
+      company: string;
+      success: boolean;
+      score?: number;
+      error?: string;
+    }> = [];
+
+    let processed = 0;
+    const initialStatus = jobQueue.getStatus();
+    const totalPending = initialStatus.pendingJobs;
+
+    if (totalPending === 0) {
+      res.json({
+        success: true,
+        message: 'No pending jobs to process',
+        results: [],
+        summary: { processed: 0, succeeded: 0, failed: 0 }
+      });
+      return;
+    }
+
+    while (true) {
+      const status = jobQueue.getStatus();
+      if (status.pendingJobs === 0) break;
+
+      const job = await jobQueue.dequeue();
+      if (!job) break;
+
+      try {
+        const result = await queueProcessor.processJob(job);
+        await jobQueue.completeJob(job.id, result);
+
+        results.push({
+          jobId: job.id,
+          title: job.title,
+          company: job.company,
+          success: true,
+          score: result.finalScore
+        });
+      } catch (error) {
+        await jobQueue.failJob(job.id, (error as Error).message);
+
+        results.push({
+          jobId: job.id,
+          title: job.title,
+          company: job.company,
+          success: false,
+          error: (error as Error).message
+        });
+      }
+
+      processed++;
+    }
+
+    const succeeded = results.filter(r => r.success).length;
+    const failed = results.filter(r => !r.success).length;
+
+    res.json({
+      success: true,
+      results,
+      summary: {
+        processed,
+        succeeded,
+        failed,
+        averageScore: succeeded > 0
+          ? results.filter(r => r.success && r.score).reduce((sum, r) => sum + (r.score || 0), 0) / succeeded
+          : 0
+      }
+    });
+  } catch (error) {
+    jobLogger.error({ err: error }, 'Failed to process job queue');
+    res.status(500).json({
+      success: false,
+      error: 'Failed to process job queue',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+/**
  * Process a job asynchronously. Updates job status as it progresses.
  * This allows the POST /optimize endpoint to return immediately.
  */
 async function processJobAsync(jobId: string): Promise<void> {
+  console.log('PROCESS JOB ASYNC: starting', jobId);
   await jobQueue.initialize();
 
-  const job = jobQueue.getJob(jobId);
-  if (!job || job.status !== 'pending') {
-    return;
-  }
-
-  // Mark as processing via dequeue
-  const dequeuedJob = await jobQueue.dequeue();
-  if (!dequeuedJob || dequeuedJob.id !== jobId) {
-    jobLogger.error(
-      { jobId, dequeuedId: dequeuedJob?.id || null },
-      'Failed to dequeue job - ID mismatch'
-    );
+  const job = await jobQueue.startJob(jobId);
+  if (!job) {
+    jobLogger.error({ jobId }, 'Failed to start job - not found or not pending');
     return;
   }
 
@@ -354,11 +512,11 @@ async function processJobAsync(jobId: string): Promise<void> {
 
   try {
     jobLogger.info(
-      { jobId, company: dequeuedJob.company, title: dequeuedJob.title },
+      { jobId, company: job.company, title: job.title },
       'Job processing started'
     );
 
-    const result = await queueProcessor.processJob(dequeuedJob);
+    const result = await queueProcessor.processJob(job);
     await jobQueue.completeJob(jobId, result);
 
     const duration = Date.now() - startTime;

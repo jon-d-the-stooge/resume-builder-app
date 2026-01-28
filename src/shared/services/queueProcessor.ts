@@ -22,6 +22,8 @@ import type {
 import type { ReframingRecommendation } from '../../ats-agent/holistic/holisticAnalyzer';
 import { jobQueue, QueuedJob, OptimizationResult } from './jobQueue';
 import { vaultManager } from './vaultManager';
+import { contentManager } from './contentManager';
+import { ContentType } from '../obsidian/types';
 import type { Vault, VaultSection, SectionObject, VaultItem } from '../../types/vault';
 import { settingsStore } from './settingsStore';
 import { LLMClient } from '../llm/client';
@@ -80,6 +82,7 @@ export class QueueProcessor {
    * @returns The optimization result with scores, matches, recommendations, and optimized content
    */
   async processJob(job: QueuedJob): Promise<OptimizationResult> {
+    console.log('OPTIMIZE PROCESSOR: running');
     // 1. Convert QueuedJob → JobPosting (ATS domain)
     const jobPosting = this.convertToJobPosting(job);
 
@@ -190,7 +193,7 @@ export class QueueProcessor {
     // Note: In Electron desktop context, userId is undefined (uses default user)
     const vaults = await vaultManager.getAllVaults(undefined);
     if (vaults.length === 0) {
-      throw new Error('No resume content found in vault. Please upload a resume first.');
+      return this.getResumeFromContentStore();
     }
 
     // Use the most recently updated vault
@@ -316,7 +319,7 @@ export class QueueProcessor {
 
     // Handle case where no resume content exists
     if (!content.trim()) {
-      throw new Error('No resume content found in vault. Please upload a resume first.');
+      return this.getResumeFromContentStore();
     }
 
     return {
@@ -332,6 +335,50 @@ export class QueueProcessor {
           skills: skillCount,
           education: educationCount,
           certifications: certificationCount
+        }
+      }
+    };
+  }
+
+  private async getResumeFromContentStore(): Promise<Resume> {
+    const types = [
+      ContentType.JOB_ENTRY,
+      ContentType.EDUCATION,
+      ContentType.SKILL,
+      ContentType.ACCOMPLISHMENT,
+      ContentType.CERTIFICATION
+    ];
+
+    const allItems = [];
+    for (const type of types) {
+      const items = await contentManager.searchContentItems({ contentType: type });
+      allItems.push(...items);
+    }
+
+    const content = allItems.map((item) => item.content).join('\n\n');
+    if (!content.trim()) {
+      throw new Error('No resume content found. Please upload a resume first.');
+    }
+
+    const jobEntries = allItems.filter((i) => i.type === ContentType.JOB_ENTRY).length;
+    const accomplishments = allItems.filter((i) => i.type === ContentType.ACCOMPLISHMENT).length;
+    const skills = allItems.filter((i) => i.type === ContentType.SKILL).length;
+    const education = allItems.filter((i) => i.type === ContentType.EDUCATION).length;
+    const certifications = allItems.filter((i) => i.type === ContentType.CERTIFICATION).length;
+
+    return {
+      id: 'content-store-resume',
+      content,
+      format: 'markdown',
+      metadata: {
+        source: 'content-store',
+        generatedAt: new Date().toISOString(),
+        itemCounts: {
+          jobEntries,
+          accomplishments,
+          skills,
+          education,
+          certifications
         }
       }
     };

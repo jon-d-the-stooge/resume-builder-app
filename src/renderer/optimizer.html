@@ -1098,18 +1098,6 @@
     </div>
   </div>
 
-  <script>
-    const __req =
-      (typeof window !== 'undefined' && typeof window.require === 'function' && window.require) ||
-      (typeof require === 'function' && require);
-    if (__req) {
-      try {
-        window.ipcRenderer = __req('electron').ipcRenderer;
-      } catch (error) {
-        console.warn('Failed to expose ipcRenderer from Electron', error);
-      }
-    }
-  </script>
   <script type="module" src="./optimizer.js"></script>
 </body>
 </html>

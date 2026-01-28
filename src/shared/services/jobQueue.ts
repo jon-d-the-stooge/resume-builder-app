@@ -205,6 +205,28 @@ export class JobQueue {
   }
 
   /**
+   * Marks a specific pending job as processing and returns it.
+   */
+  async startJob(jobId: string): Promise<QueuedJob | null> {
+    const job = this.queue.find(j => j.id === jobId && j.status === 'pending');
+
+    if (!job) {
+      return null;
+    }
+
+    job.status = 'processing';
+    this.processing = job;
+
+    this.emit('job-started', job);
+
+    if (this.autoSave) {
+      await this.save();
+    }
+
+    return job;
+  }
+
+  /**
    * Marks the current job as completed
    */
   async completeJob(jobId: string, result: OptimizationResult): Promise<void> {
