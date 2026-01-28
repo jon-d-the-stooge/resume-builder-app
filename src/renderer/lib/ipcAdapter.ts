@@ -14,6 +14,7 @@
  */
 
 import { api } from './client';
+import { ContentType } from '../../shared/obsidian/types';
 import type {
   ContentItemInput,
   SearchQuery,
@@ -126,6 +127,49 @@ export type IpcChannel =
  * Handler function type for IPC channels
  */
 type IpcHandler = (...args: unknown[]) => Promise<unknown>;
+
+// ============================================================================
+// Electron Detection (use real ipcRenderer when available)
+// ============================================================================
+
+type AnyIpcRenderer = {
+  invoke: (channel: string, ...args: unknown[]) => Promise<unknown>;
+  send: (channel: string, ...args: unknown[]) => void;
+  sendSync: (channel: string, ...args: unknown[]) => unknown;
+  on: (channel: string, listener: (...args: unknown[]) => void) => unknown;
+  once: (channel: string, listener: (...args: unknown[]) => void) => unknown;
+  removeListener: (channel: string, listener: (...args: unknown[]) => void) => unknown;
+  removeAllListeners: (channel?: string) => unknown;
+};
+
+function getElectronIpcRenderer(): AnyIpcRenderer | null {
+  if (typeof window === 'undefined') return null;
+  const w = window as unknown as {
+    process?: { versions?: { electron?: string } };
+    require?: (mod: string) => unknown;
+    ipcRenderer?: AnyIpcRenderer;
+  };
+  if (w.ipcRenderer?.invoke) {
+    return w.ipcRenderer;
+  }
+
+  if (typeof w.require === 'function') {
+    try {
+      const electron = w.require('electron') as { ipcRenderer?: AnyIpcRenderer };
+      if (electron?.ipcRenderer?.invoke) {
+        return electron.ipcRenderer;
+      }
+    } catch {
+      // Swallow if require('electron') is unavailable in web mode.
+    }
+  }
+
+  // Fallback check for Electron-specific process flag (some bundlers strip require)
+  const isElectron = !!w?.process?.versions?.electron;
+  if (!isElectron) return null;
+
+  return null;
+}
 
 /**
  * Registry of channel handlers
@@ -652,18 +696,32 @@ const handlers: HandlerRegistry = {
   // --------------------------------------------------------------------------
 
   'optimizer-get-resume-preview': async () => {
-    // Fetch all content and format as resume preview
-    const items = await api.content.search({});
-    const jobEntries = items.filter((i) => i.type === 'job-entry').length;
-    const accomplishments = items.filter((i) => i.type === 'accomplishment').length;
-    const skills = items.filter((i) => i.type === 'skill').length;
-    const education = items.filter((i) => i.type === 'education').length;
-    const certifications = items.filter((i) => i.type === 'certification').length;
+    console.log('IPC ADAPTER: optimizer-get-resume-preview called');
+    // Fetch resume-related content types and format as a preview
+    const types = [
+      ContentType.JOB_ENTRY,
+      ContentType.EDUCATION,
+      ContentType.SKILL,
+      ContentType.ACCOMPLISHMENT,
+      ContentType.CERTIFICATION,
+    ];
+
+    const allItems = [];
+    for (const type of types) {
+      const items = await api.content.search({ contentType: type });
+      allItems.push(...items);
+    }
+
+    const jobEntries = allItems.filter((i) => i.type === ContentType.JOB_ENTRY).length;
+    const accomplishments = allItems.filter((i) => i.type === ContentType.ACCOMPLISHMENT).length;
+    const skills = allItems.filter((i) => i.type === ContentType.SKILL).length;
+    const education = allItems.filter((i) => i.type === ContentType.EDUCATION).length;
+    const certifications = allItems.filter((i) => i.type === ContentType.CERTIFICATION).length;
 
     // Build content string (simplified for web)
-    const content = items.map((item) => item.content).join('\n\n');
+    const content = allItems.map((item) => item.content).join('\n\n');
 
-    return {
+    const result = {
       success: true,
       content,
       metadata: {
@@ -674,6 +732,8 @@ const handlers: HandlerRegistry = {
         certifications,
       },
     };
+    console.log('IPC ADAPTER: returning', result);
+    return result;
   },
 
   'optimizer-optimize': async (params: unknown) => {
@@ -924,7 +984,7 @@ const handlers: HandlerRegistry = {
 };
 
 // ============================================================================
-// IPC Renderer Mock
+// IPC Renderer Mock (Web API adapter)
 // ============================================================================
 
 /**
@@ -937,7 +997,7 @@ const eventListeners: Map<string, Set<EventCallback>> = new Map();
  * Mock ipcRenderer object that maintains Electron's interface
  * but routes calls to the web API client.
  */
-export const ipcRenderer = {
+const webIpcRenderer = {
   /**
    * Invoke an IPC handler and return a promise with the result.
    * This is the primary method used for request/response communication.
@@ -1081,6 +1141,21 @@ export const ipcRenderer = {
     }
   },
 };
+
+const electronIpcRenderer = getElectronIpcRenderer();
+
+export const ipcRenderer = electronIpcRenderer
+  ? {
+      ...electronIpcRenderer,
+      emit: (channel: string, ...args: unknown[]): void => {
+        console.warn(
+          `IPC Adapter: emit() called in Electron context for "${channel}". ` +
+            'This is a web-only helper; no-op in Electron.',
+          args
+        );
+      }
+    }
+  : webIpcRenderer;
 
 // ============================================================================
 // Type Exports

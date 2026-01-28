@@ -249,7 +249,7 @@ function viewJobResult(jobId) {
       id: job.id,
       title: job.title,
       company: job.company,
-      description: job.rawDescription || job.description,
+      description: job.description || job.rawDescription || '',
       result: job.result
     }));
     // Navigate to optimizer page with viewResult flag

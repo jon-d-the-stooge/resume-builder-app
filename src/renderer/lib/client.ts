@@ -175,6 +175,7 @@ export interface QueueJob {
   id: string;
   company: string;
   title: string;
+  description?: string;
   sourceUrl?: string;
   status: JobStatus;
   priority: number;

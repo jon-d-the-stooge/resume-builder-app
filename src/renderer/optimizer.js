@@ -159,19 +159,22 @@ async function handleLoadFromVault() {
   try {
     showLoading(elements.loadVaultBtn, 'Loading...');
 
-    const result = await ipcRenderer.invoke('optimizer-get-resume-preview');
+    console.log('LOAD VAULT: calling optimizer-get-resume-preview');
+    const response = await ipcRenderer.invoke('optimizer-get-resume-preview');
+    console.log('LOAD VAULT: response', response);
 
-    if (result.success && result.content) {
-      state.resume.content = result.content;
+    if (response.success && response.content) {
+      state.resume.content = response.content;
       state.resume.source = 'vault';
       state.resume.filename = 'Vault Resume';
 
       updateResumePreview();
       updateOptimizeButtonState();
     } else {
-      showError(result.error || 'No resume content found in vault. Please upload a resume first.');
+      showError(response.error || 'No resume content found in vault. Please upload a resume first.');
     }
   } catch (error) {
+    console.log('LOAD VAULT: error', error);
     showError('Failed to load resume from vault: ' + error.message);
   } finally {
     hideLoading(elements.loadVaultBtn, 'Load from Vault');
@@ -554,7 +557,7 @@ function viewQueueJobResult(job) {
       id: job.id,
       title: job.title,
       company: job.company,
-      description: job.rawDescription || job.description,
+      description: job.description || job.rawDescription || '',
       result: job.result
     }));
     // Reload current page with viewResult flag
@@ -691,8 +694,7 @@ function loadJobForOptimization(job) {
   // Load job data into form fields
   elements.jobTitle.value = job.title || '';
   elements.jobCompany.value = job.company || '';
-  // Queue stores description as 'rawDescription', not 'description'
-  elements.jobDescription.value = job.rawDescription || job.description || '';
+  elements.jobDescription.value = job.description || job.rawDescription || '';
 
   // Scroll to top of page to show the form
   window.scrollTo({ top: 0, behavior: 'smooth' });
