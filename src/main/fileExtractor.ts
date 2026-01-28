@@ -53,6 +53,77 @@ export class FileExtractor {
   }
 
   /**
+   * Extracts text content from a buffer based on file extension
+   * @param buffer - File content as Buffer
+   * @param ext - File extension (pdf, docx, txt, md)
+   * @returns Extracted text content with metadata
+   */
+  async extractFromBuffer(buffer: Buffer, ext: string): Promise<ExtractionResult> {
+    const extension = ext.toLowerCase().replace('.', '');
+
+    switch (extension) {
+      case 'pdf':
+        return this.extractPDFFromBuffer(buffer);
+
+      case 'docx':
+      case 'doc':
+        return this.extractDOCXFromBuffer(buffer);
+
+      case 'txt':
+      case 'md':
+        return this.extractTXTFromBuffer(buffer);
+
+      default:
+        throw new Error(`Unsupported file format: ${ext}`);
+    }
+  }
+
+  /**
+   * Extracts text from PDF buffer
+   */
+  private async extractPDFFromBuffer(buffer: Buffer): Promise<ExtractionResult> {
+    const data = await pdfParse(buffer);
+
+    return {
+      text: this.cleanExtractedText(data.text),
+      pageCount: data.numpages,
+      metadata: {
+        title: data.info?.Title || undefined,
+        author: data.info?.Author || undefined,
+        creationDate: data.info?.CreationDate
+          ? this.parsePDFDate(data.info.CreationDate)
+          : undefined
+      }
+    };
+  }
+
+  /**
+   * Extracts text from DOCX buffer
+   */
+  private async extractDOCXFromBuffer(buffer: Buffer): Promise<ExtractionResult> {
+    const result = await mammoth.extractRawText({ buffer });
+
+    if (result.messages && result.messages.length > 0) {
+      console.warn('DOCX conversion warnings:', result.messages);
+    }
+
+    return {
+      text: this.cleanExtractedText(result.value)
+    };
+  }
+
+  /**
+   * Extracts text from TXT/MD buffer
+   */
+  private async extractTXTFromBuffer(buffer: Buffer): Promise<ExtractionResult> {
+    const text = buffer.toString('utf-8');
+
+    return {
+      text: this.cleanExtractedText(text)
+    };
+  }
+
+  /**
    * Detects file format from file extension
    * @param fileName - Name or path of the file
    * @returns Detected FileFormat or null if unsupported

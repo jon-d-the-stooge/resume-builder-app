@@ -146,6 +146,8 @@ export const loggers = {
   api: createComponentLogger('api'),
   /** LLM/AI operations */
   llm: createComponentLogger('llm'),
+  /** Career agent operations */
+  agent: createComponentLogger('agent'),
 };
 
 // =============================================================================

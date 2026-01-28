@@ -1,5 +1,5 @@
 // Content item editor UI logic
-const { ipcRenderer } = require('./api/ipcAdapter');
+import { ipcRenderer } from './lib/ipcAdapter';
 
 // DOM elements
 const loadingState = document.getElementById('loadingState');

@@ -1,5 +1,5 @@
 // Career Agent Chat UI Logic
-const { ipcRenderer } = require('./api/ipcAdapter');
+import { ipcRenderer } from './lib/ipcAdapter';
 
 // DOM Elements
 const messagesList = document.getElementById('messagesList');
@@ -49,12 +49,20 @@ async function initChat() {
 async function loadAgentContext() {
   try {
     // Load skills preferences from agent memory
-    const skillPrefs = await ipcRenderer.invoke('agent-get-preferences', 'skill');
+    // Falls back to empty array if not implemented or returns error object
+    let skillPrefs = [];
+    try {
+      const result = await ipcRenderer.invoke('agent-get-preferences', 'skill');
+      skillPrefs = Array.isArray(result) ? result : [];
+    } catch (err) {
+      console.log('Could not load skill preferences:', err.message);
+    }
 
     // Also load skills from vault (the actual documented skills)
     let vaultSkills = [];
     try {
       vaultSkills = await ipcRenderer.invoke('search-content', { contentType: 'skill' });
+      vaultSkills = Array.isArray(vaultSkills) ? vaultSkills : [];
     } catch (err) {
       console.log('Could not load vault skills:', err.message);
     }
@@ -173,7 +181,7 @@ async function processVaultCommands(message) {
     const description = match[3].trim() || '';
     try {
       const result = await ipcRenderer.invoke('create-manual-content', {
-        type: 'job_entry',
+        type: 'job-entry',
         content: description || `${title} at ${company}`,
         tags: ['from-chat'],
         metadata: {

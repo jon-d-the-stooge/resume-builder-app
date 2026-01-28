@@ -548,4 +548,8 @@ export class ApplicationsStore {
 }
 
 // Export singleton instance for backward compatibility
-export const applicationsStore = new ApplicationsStore();
+// Use DATA_DIR env var for web/Docker deployment, falling back to ./data
+const dataDir = process.env.DATA_DIR || './data';
+export const applicationsStore = new ApplicationsStore({
+  storagePath: dataDir
+});

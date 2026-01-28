@@ -10,6 +10,8 @@ import applicationsRouter from './applications';
 import knowledgeBaseRouter from './knowledgeBase';
 import settingsRouter from './settings';
 import contentRouter from './content';
+import agentRouter from './agent';
+import resumeRouter from './resume';
 
 const router = Router();
 
@@ -20,6 +22,8 @@ router.use('/applications', applicationsRouter);
 router.use('/knowledge-base', knowledgeBaseRouter);
 router.use('/settings', settingsRouter);
 router.use('/content', contentRouter);
+router.use('/agent', agentRouter);
+router.use('/resume', resumeRouter);
 
 // Re-export individual routers for direct import
 export {
@@ -28,7 +32,9 @@ export {
   applicationsRouter,
   knowledgeBaseRouter,
   settingsRouter,
-  contentRouter
+  contentRouter,
+  agentRouter,
+  resumeRouter
 };
 
 export default router;

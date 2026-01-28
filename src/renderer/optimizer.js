@@ -5,7 +5,8 @@
  * and UI updates for the resume optimizer screen.
  */
 
-const { ipcRenderer } = require('./api/ipcAdapter');
+import { ipcRenderer } from './lib/ipcAdapter';
+import { readFileAsBase64 } from './lib/fileUtils';
 
 // ============================================================================
 // State Management
@@ -110,8 +111,9 @@ const elements = {
 function initializeEventListeners() {
   // Resume loading
   elements.loadVaultBtn.addEventListener('click', handleLoadFromVault);
-  // Use native dialog instead of HTML5 file input (HTML5 doesn't provide file.path)
-  elements.uploadResumeBtn.addEventListener('click', handleFileUploadWithDialog);
+  // Use HTML file input for web-based file upload
+  elements.uploadResumeBtn.addEventListener('click', () => elements.resumeFileInput.click());
+  elements.resumeFileInput.addEventListener('change', handleFileUpload);
 
   // Job input changes
   elements.jobTitle.addEventListener('input', updateOptimizeButtonState);
@@ -176,61 +178,44 @@ async function handleLoadFromVault() {
   }
 }
 
-// Use native Electron dialog to select resume file (HTML5 file input doesn't provide file.path)
-async function handleFileUploadWithDialog() {
+// Handle file upload via web API
+async function handleFileUpload(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
   try {
-    const fileResult = await ipcRenderer.invoke('select-resume-file');
-    if (!fileResult.success) {
-      return; // User canceled
+    showLoading(elements.uploadResumeBtn, 'Processing...');
+
+    // Read file as base64
+    const base64Content = await readFileAsBase64(file);
+
+    // Send to backend for extraction
+    const response = await fetch('/api/resume/extract', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fileName: file.name,
+        fileContent: base64Content
+      })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.message || result.error || 'Failed to extract content');
     }
 
-    const fileName = fileResult.name;
-    const filePath = fileResult.path;
-
-    // For text/markdown files, we can read directly via IPC
-    if (fileName.endsWith('.txt') || fileName.endsWith('.md')) {
-      showLoading(elements.uploadResumeBtn, 'Processing...');
-
-      const result = await ipcRenderer.invoke('optimizer-extract-file', {
-        path: filePath,
-        name: fileName
-      });
-
-      if (result.success && result.content) {
-        state.resume.content = result.content;
-        state.resume.source = 'upload';
-        state.resume.filename = fileName;
-        updateResumePreview();
-        updateOptimizeButtonState();
-      } else {
-        showError(result.error || 'Failed to read file');
-      }
-
-      hideLoading(elements.uploadResumeBtn, 'Upload New');
-    } else {
-      // For PDF/DOCX, send to main process for extraction
-      showLoading(elements.uploadResumeBtn, 'Processing...');
-
-      const result = await ipcRenderer.invoke('optimizer-extract-file', {
-        path: filePath,
-        name: fileName
-      });
-
-      if (result.success && result.content) {
-        state.resume.content = result.content;
-        state.resume.source = 'upload';
-        state.resume.filename = fileName;
-        updateResumePreview();
-        updateOptimizeButtonState();
-      } else {
-        showError(result.error || 'Failed to extract content from file');
-      }
-
-      hideLoading(elements.uploadResumeBtn, 'Upload New');
-    }
+    state.resume.content = result.content;
+    state.resume.source = 'upload';
+    state.resume.filename = file.name;
+    updateResumePreview();
+    updateOptimizeButtonState();
   } catch (error) {
     showError('Failed to process file: ' + error.message);
+  } finally {
     hideLoading(elements.uploadResumeBtn, 'Upload New');
+    // Reset file input so same file can be selected again
+    elements.resumeFileInput.value = '';
   }
 }
 

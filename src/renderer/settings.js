@@ -4,7 +4,7 @@
  */
 
 // Use IPC adapter for web/Electron compatibility
-const { ipcRenderer } = require('./api/ipcAdapter');
+import { ipcRenderer } from './lib/ipcAdapter';
 
 // DOM Elements
 const form = document.getElementById('settingsForm');

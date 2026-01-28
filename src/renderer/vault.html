@@ -251,7 +251,7 @@
       text-transform: uppercase;
     }
 
-    .type-job_entry {
+    .type-job-entry {
       background: #e3f2fd;
       color: #1565c0;
     }
@@ -625,7 +625,7 @@
         <span class="filter-label">Type:</span>
         <select class="filter-select" id="typeFilter">
           <option value="">All Types</option>
-          <option value="job_entry">Job Entries</option>
+          <option value="job-entry">Job Entries</option>
           <option value="accomplishment">Accomplishments</option>
           <option value="skill">Skills</option>
           <option value="education">Education</option>
@@ -676,6 +676,9 @@
     </div>
   </div>
 
-  <script src="./vault.js"></script>
+  <!-- Hidden file input for resume upload -->
+  <input type="file" id="resumeFileInput" style="display: none;" accept=".pdf,.docx,.txt,.md">
+
+  <script type="module" src="./vault.js"></script>
 </body>
 </html>

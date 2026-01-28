@@ -10,7 +10,7 @@ import * as http from 'http';
 import { LLMClient } from '../shared/llm';
 import { SearchCriteria } from './opusAgent';
 import { QueueJobInput } from '../main/jobQueue';
-import { settingsStore } from '../main/settingsStore';
+import { settingsStore } from '../shared/services/settingsStore';
 
 /**
  * Result from a job search

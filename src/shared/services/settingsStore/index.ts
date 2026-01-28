@@ -54,18 +54,38 @@ function loadSettings(userId: string): void {
   ensureDataDir();
   const settingsFile = getSettingsFilePath(effectiveUserId);
 
+  // Start with defaults, then layer environment variables, then user settings file
+  let settings: Settings = { ...DEFAULT_SETTINGS };
+
+  // Apply environment variables as fallback (server-level configuration)
+  if (process.env.ANTHROPIC_API_KEY) {
+    settings.anthropicApiKey = process.env.ANTHROPIC_API_KEY;
+  }
+  if (process.env.OPENAI_API_KEY) {
+    settings.openaiApiKey = process.env.OPENAI_API_KEY;
+  }
+  if (process.env.RAPIDAPI_KEY) {
+    settings.jsearchApiKey = process.env.RAPIDAPI_KEY;
+  }
+  if (process.env.ADZUNA_APP_ID) {
+    settings.adzunaAppId = process.env.ADZUNA_APP_ID;
+  }
+  if (process.env.ADZUNA_API_KEY) {
+    settings.adzunaApiKey = process.env.ADZUNA_API_KEY;
+  }
+
+  // Load user-specific settings file (overrides env vars)
   if (fs.existsSync(settingsFile)) {
     try {
       const data = fs.readFileSync(settingsFile, 'utf-8');
       const loaded = JSON.parse(data);
-      userSettings.set(effectiveUserId, { ...DEFAULT_SETTINGS, ...loaded });
+      settings = { ...settings, ...loaded };
     } catch (error) {
       console.error(`Error loading settings for user ${effectiveUserId}:`, error);
-      userSettings.set(effectiveUserId, { ...DEFAULT_SETTINGS });
     }
-  } else {
-    userSettings.set(effectiveUserId, { ...DEFAULT_SETTINGS });
   }
+
+  userSettings.set(effectiveUserId, settings);
 }
 
 function saveSettings(userId: string): void {

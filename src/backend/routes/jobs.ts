@@ -5,7 +5,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { jobQueue, queueProcessor, settingsStore } from '../services';
+import { jobQueue, queueProcessor, settingsStore, rapidAPIProxy } from '../services';
 import { loggers } from '../logger';
 import type { JobStatus, QueueJobInput } from '../../main/jobQueue';
 
@@ -373,5 +373,79 @@ async function processJobAsync(jobId: string): Promise<void> {
     await jobQueue.failJob(jobId, (error as Error).message);
   }
 }
+
+/**
+ * POST /api/jobs/search
+ * Search for jobs using external job search APIs
+ * Maps to IPC: search-jobs
+ */
+router.post('/search', async (req: Request, res: Response) => {
+  try {
+    const { query, location, remote, employmentTypes, datePosted, page, numPages } = req.body;
+
+    if (!query) {
+      res.status(400).json({
+        success: false,
+        error: 'Missing required field: query'
+      });
+      return;
+    }
+
+    // Check if RapidAPI key is configured
+    if (!rapidAPIProxy.isReady()) {
+      res.status(400).json({
+        success: false,
+        error: 'Job search API not configured',
+        message: 'RapidAPI key (RAPIDAPI_KEY) is required for job search.'
+      });
+      return;
+    }
+
+    const results = await rapidAPIProxy.searchJSearch(
+      query,
+      {
+        location,
+        remote,
+        page: page || 1,
+        numPages: numPages || 1
+      },
+      req.user?.id
+    );
+
+    // Transform to match expected format
+    const jobs = (results.data || []).map(job => ({
+      id: job.job_id,
+      title: job.job_title,
+      company: job.employer_name,
+      location: job.job_city && job.job_state
+        ? `${job.job_city}, ${job.job_state}`
+        : job.job_country || 'Remote',
+      sourceUrl: job.job_apply_link || job.job_google_link,
+      snippet: job.job_description?.substring(0, 500) || '',
+      description: job.job_description,
+      salary: job.job_min_salary && job.job_max_salary
+        ? `${job.job_salary_currency || '$'}${job.job_min_salary.toLocaleString()} - ${job.job_salary_currency || '$'}${job.job_max_salary.toLocaleString()}`
+        : undefined,
+      postedDate: job.job_posted_at_datetime_utc,
+      remote: job.job_is_remote,
+      employmentType: job.job_employment_type,
+      relevanceScore: 1.0
+    }));
+
+    res.json({
+      success: true,
+      results: jobs,
+      total: jobs.length
+    });
+  } catch (error) {
+    jobLogger.error({ err: error }, 'Job search failed');
+    res.status(500).json({
+      success: false,
+      error: 'Job search failed',
+      message: error instanceof Error ? error.message : 'Unknown error',
+      results: []
+    });
+  }
+});
 
 export default router;

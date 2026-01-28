@@ -1,5 +1,5 @@
 // Search UI logic
-const { ipcRenderer } = require('./api/ipcAdapter');
+import { ipcRenderer } from './lib/ipcAdapter';
 
 // State
 let selectedTags = [];

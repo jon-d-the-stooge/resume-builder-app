@@ -947,4 +947,8 @@ export class KnowledgeBaseStore {
 }
 
 // Export singleton instance for backward compatibility
-export const knowledgeBaseStore = new KnowledgeBaseStore();
+// Use DATA_DIR env var for web/Docker deployment, falling back to ./data
+const dataDir = process.env.DATA_DIR || './data';
+export const knowledgeBaseStore = new KnowledgeBaseStore({
+  storagePath: dataDir
+});

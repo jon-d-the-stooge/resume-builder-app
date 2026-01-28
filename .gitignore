@@ -3,5 +3,7 @@ dist/
 .env
 *.log
 .DS_Store
-node_modules/
 release/
+
+# Local data storage (job queue, knowledge base, etc.)
+data/

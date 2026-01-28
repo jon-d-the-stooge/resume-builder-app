@@ -1,5 +1,5 @@
 // Job Queue UI Logic
-const { ipcRenderer } = require('./api/ipcAdapter');
+import { ipcRenderer } from './lib/ipcAdapter';
 
 // DOM Elements
 const pendingCount = document.getElementById('pendingCount');

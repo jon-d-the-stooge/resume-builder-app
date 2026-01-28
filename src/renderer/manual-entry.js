@@ -1,5 +1,5 @@
 // Manual content entry UI logic
-const { ipcRenderer } = require('./api/ipcAdapter');
+import { ipcRenderer } from './lib/ipcAdapter';
 
 // DOM elements
 const form = document.getElementById('manualEntryForm');

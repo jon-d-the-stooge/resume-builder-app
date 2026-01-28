@@ -6,6 +6,7 @@
 
 // Load and validate environment configuration (fails fast on missing required vars)
 import { config } from './config';
+import './types/express';
 
 import express, { Application } from 'express';
 import cors from 'cors';
@@ -18,6 +19,8 @@ import contentRouter from './routes/content';
 import aiRouter from './routes/ai';
 import adminRouter from './routes/admin';
 import usageRouter from './routes/usage';
+import agentRouter from './routes/agent';
+import resumeRouter from './routes/resume';
 import { rateLimiter } from './middleware/rateLimiter';
 import { authenticateRequest } from './middleware/auth';
 import { requestLogger } from './middleware/requestLogger';
@@ -44,7 +47,7 @@ const corsOptions: cors.CorsOptions = {
 
 // Middleware
 app.use(cors(corsOptions));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' })); // Increased for base64-encoded file uploads
 app.use(requestLogger);
 
 // Health check endpoint (unauthenticated - for load balancers/monitoring)
@@ -70,6 +73,8 @@ app.use('/api/content', contentRouter);
 app.use('/api/ai', rateLimiter, aiRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/usage', usageRouter);
+app.use('/api/agent', agentRouter);
+app.use('/api/resume', resumeRouter);
 
 // Error handling middleware (must be last)
 app.use(errorHandler);

@@ -7,15 +7,23 @@
   },
   "include": [
     "src/backend/**/*",
-    "src/shared/**/*"
+    "src/shared/**/*",
+    "src/agents/**/*",
+    "src/main/settingsStore/index.ts",
+    "src/main/settingsStore/types.ts",
+    "src/main/settingsStore/web.ts",
+    "src/main/fileExtractor.ts",
+    "src/main/resumeParser.ts",
+    "src/main/vaultManager.ts",
+    "src/types/**/*"
   ],
   "exclude": [
     "node_modules",
     "dist",
     "src/renderer/**/*",
     "src/tests/**/*",
-    "src/main/**/*",
     "src/ats-agent/**/*",
-    "src/agents/**/*"
+    "src/main/index.ts",
+    "src/main/settingsStore/electron.ts"
   ]
 }

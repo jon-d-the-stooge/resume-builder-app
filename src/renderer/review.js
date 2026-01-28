@@ -1,5 +1,5 @@
 // Content review UI logic
-const { ipcRenderer } = require('./api/ipcAdapter');
+import { ipcRenderer } from './lib/ipcAdapter';
 
 // State
 let parsedData = null;
@@ -23,8 +23,15 @@ const cancelAddButton = document.getElementById('cancelAddButton');
 async function initialize() {
   try {
     console.log('review.js: initialize() called');
-    // Get parsed data from main process
-    parsedData = await ipcRenderer.invoke('get-parsed-data');
+    // Prefer session storage for web flow; fall back to IPC for Electron.
+    const stored = sessionStorage.getItem('importedResume');
+    if (stored) {
+      const storedPayload = JSON.parse(stored);
+      parsedData = storedPayload.parsedData || storedPayload;
+    } else {
+      // Get parsed data from main process
+      parsedData = await ipcRenderer.invoke('get-parsed-data');
+    }
 
     console.log('review.js: received parsedData:', !!parsedData);
     if (parsedData) {

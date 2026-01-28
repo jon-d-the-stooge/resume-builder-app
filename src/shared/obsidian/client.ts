@@ -741,4 +741,8 @@ export class ObsidianMCPClientImpl implements ObsidianMCPClient {
 }
 
 // Export singleton instance with default configuration
-export const obsidianClient = new ObsidianMCPClientImpl();
+// Use DATA_DIR env var for web/Docker deployment, falling back to ./data
+const dataDir = process.env.DATA_DIR || './data';
+export const obsidianClient = new ObsidianMCPClientImpl('resume-content', {
+  vaultRootPath: dataDir
+});

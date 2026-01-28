@@ -1,5 +1,5 @@
 // Job Search UI Logic
-const { ipcRenderer } = require('./api/ipcAdapter');
+import { ipcRenderer } from './lib/ipcAdapter';
 
 // DOM Elements
 const searchTitle = document.getElementById('searchTitle');

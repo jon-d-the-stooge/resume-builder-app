@@ -803,4 +803,8 @@ export class ContentManagerImpl implements ContentManager {
 }
 
 // Export singleton instance
-export const contentManager = new ContentManagerImpl();
+// Use DATA_DIR env var for web/Docker deployment, falling back to ./data
+const dataDir = process.env.DATA_DIR || './data';
+export const contentManager = new ContentManagerImpl({
+  storagePath: dataDir
+});

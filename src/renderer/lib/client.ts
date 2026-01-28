@@ -838,6 +838,39 @@ class ApiClient {
 
       throw this.createError('Optimization timed out', 408);
     },
+
+    /**
+     * Search for jobs using external job search APIs
+     * IPC equivalent: ipcRenderer.invoke('search-jobs', criteria)
+     */
+    search: async (criteria: {
+      query?: string;
+      location?: string;
+      remote?: boolean;
+      employmentTypes?: string[];
+      datePosted?: string;
+    }): Promise<{
+      success: boolean;
+      results: Array<{
+        id: string;
+        title: string;
+        company: string;
+        location: string;
+        sourceUrl: string;
+        snippet: string;
+        description?: string;
+        salary?: string;
+        postedDate?: string;
+        remote?: boolean;
+        relevanceScore: number;
+      }>;
+      error?: string;
+    }> => {
+      return this.request('/jobs/search', {
+        method: 'POST',
+        body: JSON.stringify(criteria)
+      });
+    },
   };
 
   // ==========================================================================

@@ -4,7 +4,7 @@
  * Handles displaying, filtering, and managing saved resume optimizations.
  */
 
-const { ipcRenderer } = require('./api/ipcAdapter');
+import { ipcRenderer } from './lib/ipcAdapter';
 
 // ============================================================================
 // DOM Elements

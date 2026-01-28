@@ -11,7 +11,7 @@ import * as path from 'path';
 import { LLMClient } from '../shared/llm';
 import { obsidianClient } from '../main/obsidianClient';
 import { vaultManager } from '../main/vaultManager';
-import { settingsStore } from '../main/settingsStore';
+import { settingsStore } from '../shared/services/settingsStore';
 import { jobQueue, QueuedJob, OptimizationResult } from '../main/jobQueue';
 import type { Vault, VaultSection, SectionObject, VaultItem } from '../types/vault';
 
@@ -1185,7 +1185,7 @@ Use that question—or questions like it—to help users think bigger than their
 
     try {
       // Get all vaults and use the most recent one
-      const vaults = await vaultManager.getAllVaults();
+      const vaults = await vaultManager.getAllVaults(undefined);
       if (vaults.length === 0) {
         return lines.join('\n');
       }
@@ -1297,7 +1297,7 @@ Use that question—or questions like it—to help users think bigger than their
 
     // 2. Aggregate from vault job entries
     try {
-      const vaults = await vaultManager.getAllVaults();
+      const vaults = await vaultManager.getAllVaults(undefined);
       for (const vault of vaults) {
         const experienceSection = vault.sections.find(s => s.type === 'experience');
         if (!experienceSection) continue;

@@ -25,6 +25,7 @@ import type {
   KnowledgeBaseFilters,
   KnowledgeBaseInput,
 } from './client';
+import type { ParsedResume } from '../../types';
 
 // ============================================================================
 // Types
@@ -211,9 +212,127 @@ const handlers: HandlerRegistry = {
   ),
 
   'save-parsed-content': async (data: unknown) => {
-    // In web mode, this maps to content.create for each item
-    // The data structure needs to be parsed and items created individually
-    console.warn('save-parsed-content: Consider using content.create() directly');
+    const parsed = data as ParsedResume;
+    if (!parsed || !Array.isArray(parsed.jobEntries)) {
+      throw new Error('Invalid parsed resume data');
+    }
+
+    const normalizeLocation = (loc: unknown) => {
+      if (!loc) return undefined;
+      if (typeof loc === 'string') {
+        const trimmed = loc.trim();
+        return trimmed ? { city: trimmed } : undefined;
+      }
+      return loc as ContentItemInput['metadata']['location'];
+    };
+
+    const createdSkillNames = new Set<string>();
+
+    // Create job entries and their child accomplishments/skills
+    for (const job of parsed.jobEntries || []) {
+      const jobContent = job.title || job.company || 'Job Entry';
+      const jobMetadata: ContentItemInput['metadata'] = {};
+
+      if (job.company) jobMetadata.company = job.company;
+      if (job.location) jobMetadata.location = normalizeLocation(job.location);
+      if (job.duration?.start || job.duration?.end) {
+        jobMetadata.dateRange = {
+          start: job.duration?.start || '',
+          end: job.duration?.end || undefined,
+        };
+      }
+
+      const jobResult = await api.content.create({
+        type: 'job-entry',
+        content: jobContent,
+        tags: (job.tags as string[] | undefined) || [],
+        metadata: jobMetadata,
+      });
+
+      const jobId = jobResult.id;
+
+      for (const acc of job.accomplishments || []) {
+        if (!acc.description) continue;
+        await api.content.create({
+          type: 'accomplishment',
+          content: acc.description,
+          tags: acc.tags || [],
+          metadata: {},
+          parentId: jobId,
+        });
+      }
+
+      for (const skill of job.skills || []) {
+        if (!skill.name) continue;
+        const nameKey = skill.name.toLowerCase();
+        createdSkillNames.add(nameKey);
+        await api.content.create({
+          type: 'skill',
+          content: skill.name,
+          tags: skill.tags || [],
+          metadata: skill.proficiency ? { proficiency: skill.proficiency } : {},
+          parentId: jobId,
+        });
+      }
+    }
+
+    // Create standalone skills (avoid duplicates)
+    for (const skill of parsed.skills || []) {
+      if (!skill.name) continue;
+      const nameKey = skill.name.toLowerCase();
+      if (createdSkillNames.has(nameKey)) continue;
+      createdSkillNames.add(nameKey);
+      await api.content.create({
+        type: 'skill',
+        content: skill.name,
+        tags: skill.tags || [],
+        metadata: skill.proficiency ? { proficiency: skill.proficiency } : {},
+      });
+    }
+
+    // Education
+    for (const edu of parsed.education || []) {
+      const parts = [edu.degree, edu.institution].filter(Boolean);
+      const content = parts.join(' — ') || edu.institution || edu.degree || 'Education';
+      const metadata: ContentItemInput['metadata'] = {};
+
+      if (edu.location) metadata.location = normalizeLocation(edu.location);
+      if (edu.dateRange?.start || edu.dateRange?.end) {
+        metadata.dateRange = {
+          start: edu.dateRange?.start || '',
+          end: edu.dateRange?.end || undefined,
+        };
+      }
+
+      await api.content.create({
+        type: 'education',
+        content,
+        tags: edu.tags || [],
+        metadata,
+      });
+    }
+
+    // Certifications
+    for (const cert of parsed.certifications || []) {
+      const content = cert.name || 'Certification';
+      const metadata: ContentItemInput['metadata'] = {};
+
+      if (cert.issuer) metadata.company = cert.issuer;
+      if (cert.dateIssued || cert.expirationDate) {
+        metadata.dateRange = {
+          start: cert.dateIssued || '',
+          end: cert.expirationDate || undefined,
+        };
+      }
+
+      await api.content.create({
+        type: 'certification',
+        content,
+        tags: cert.tags || [],
+        metadata,
+      });
+    }
+
     return { success: true };
   },
 
@@ -445,30 +564,43 @@ const handlers: HandlerRegistry = {
   // Opus Agent
   // --------------------------------------------------------------------------
 
-  'agent-chat': notImplemented(
-    'agent-chat',
-    'Agent chat endpoint not yet implemented in web API.'
-  ),
+  'agent-chat': async (message: string) => {
+    const response = await fetch('/api/agent/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message })
+    });
+    return response.json();
+  },
 
-  'agent-get-preferences': notImplemented(
-    'agent-get-preferences',
-    'Agent preferences endpoint not yet implemented in web API.'
-  ),
+  'agent-get-preferences': async (type?: string) => {
+    const url = type ? `/api/agent/preferences?type=${encodeURIComponent(type)}` : '/api/agent/preferences';
+    const response = await fetch(url);
+    return response.json();
+  },
 
-  'agent-learn-preference': notImplemented(
-    'agent-learn-preference',
-    'Agent learning endpoint not yet implemented in web API.'
-  ),
+  'agent-learn-preference': async (preference: unknown) => {
+    const response = await fetch('/api/agent/preferences', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(preference)
+    });
+    return response.json();
+  },
 
-  'agent-infer-skill': notImplemented(
-    'agent-infer-skill',
-    'Agent skill inference endpoint not yet implemented in web API.'
-  ),
+  'agent-infer-skill': async (params: { skill: string; source?: string; proficiency?: string }) => {
+    const response = await fetch('/api/agent/infer-skill', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params)
+    });
+    return response.json();
+  },
 
-  'agent-get-context': notImplemented(
-    'agent-get-context',
-    'Agent context endpoint not yet implemented in web API.'
-  ),
+  'agent-get-context': async () => {
+    const response = await fetch('/api/agent/context');
+    return response.json();
+  },
 
   'agent-search-companies': notImplemented(
     'agent-search-companies',
@@ -479,10 +611,31 @@ const handlers: HandlerRegistry = {
   // Job Search
   // --------------------------------------------------------------------------
 
-  'search-jobs': notImplemented(
-    'search-jobs',
-    'Job search endpoint not yet implemented in web API.'
-  ),
+  'search-jobs': async (criteria: unknown) => {
+    const searchCriteria = criteria as {
+      query?: string;
+      keywords?: string[];
+      title?: string;
+      location?: string;
+      remote?: boolean;
+      employmentTypes?: string[];
+      datePosted?: string;
+    };
+
+    // Build query from criteria
+    const query = searchCriteria.query ||
+      searchCriteria.keywords?.join(' ') ||
+      searchCriteria.title ||
+      '';
+
+    return api.jobs.search({
+      query,
+      location: searchCriteria.location,
+      remote: searchCriteria.remote,
+      employmentTypes: searchCriteria.employmentTypes,
+      datePosted: searchCriteria.datePosted
+    });
+  },
 
   'extract-job-from-url': notImplemented(
     'extract-job-from-url',
@@ -846,9 +999,10 @@ export const ipcRenderer = {
    * @param args - Arguments to send
    * @returns undefined (sync IPC not supported in web mode)
    */
-  sendSync: (channel: string, ..._args: unknown[]): unknown => {
+  sendSync: (channel: string, ...args: unknown[]): unknown => {
     console.error(
-      `IPC Adapter: sendSync() is not supported in web mode. Channel: "${channel}"`
+      `IPC Adapter: sendSync() is not supported in web mode. Channel: "${channel}"`,
+      args
     );
     return undefined;
   },

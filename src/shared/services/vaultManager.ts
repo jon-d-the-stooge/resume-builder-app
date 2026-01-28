@@ -1015,4 +1015,8 @@ export class VaultManager {
 }
 
 // Export singleton instance
-export const vaultManager = new VaultManager();
+// Use DATA_DIR env var for web/Docker deployment, falling back to ./data
+const dataDir = process.env.DATA_DIR || './data';
+export const vaultManager = new VaultManager({
+  storagePath: dataDir
+});

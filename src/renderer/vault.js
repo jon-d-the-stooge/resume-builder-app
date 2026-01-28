@@ -1,5 +1,6 @@
 // Resume Vault UI Logic
-const { ipcRenderer } = require('./api/ipcAdapter');
+import { ipcRenderer } from './lib/ipcAdapter';
+import { readFileAsBase64 } from './lib/fileUtils';
 
 // DOM Elements
 const totalItems = document.getElementById('totalItems');
@@ -12,6 +13,7 @@ const searchBtn = document.getElementById('searchBtn');
 const contentGrid = document.getElementById('contentGrid');
 const emptyState = document.getElementById('emptyState');
 const uploadResumeBtn = document.getElementById('uploadResumeBtn');
+const resumeFileInput = document.getElementById('resumeFileInput');
 
 // State
 let allContent = [];
@@ -32,7 +34,7 @@ async function initVault() {
 async function loadAllContent() {
   try {
     // Load all content types
-    const types = ['job_entry', 'accomplishment', 'skill', 'education', 'certification'];
+    const types = ['job-entry', 'accomplishment', 'skill', 'education', 'certification'];
     const results = await Promise.all(
       types.map(type =>
         ipcRenderer.invoke('search-content', { contentType: type })
@@ -53,7 +55,7 @@ async function loadAllContent() {
 
 function updateStats() {
   totalItems.textContent = allContent.length;
-  jobCount.textContent = allContent.filter(c => c.type === 'job_entry').length;
+  jobCount.textContent = allContent.filter(c => c.type === 'job-entry').length;
   accomplishmentCount.textContent = allContent.filter(c => c.type === 'accomplishment').length;
   skillCount.textContent = allContent.filter(c => c.type === 'skill').length;
 }
@@ -277,28 +279,54 @@ async function deleteItem(id) {
   }
 }
 
-async function uploadResume() {
+// Trigger file input when button is clicked
+uploadResumeBtn.addEventListener('click', () => {
+  resumeFileInput.click();
+});
+
+// Handle file selection for resume upload
+resumeFileInput.addEventListener('change', async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
   try {
-    const result = await ipcRenderer.invoke('select-resume-file');
+    uploadResumeBtn.disabled = true;
+    uploadResumeBtn.textContent = 'Processing...';
 
-    if (result.success) {
-      uploadResumeBtn.disabled = true;
-      uploadResumeBtn.textContent = 'Processing...';
+    // Read file as base64
+    const base64Content = await readFileAsBase64(file);
 
-      await ipcRenderer.invoke('process-resume', {
-        name: result.name,
-        path: result.path
-      });
+    // Upload to backend
+    const response = await fetch('/api/vaults/import-resume', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fileName: file.name,
+        fileContent: base64Content
+      })
+    });
 
-      // Main process will navigate to review.html
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || result.error || 'Failed to import resume');
     }
+
+    // Store parsed data for review page
+    sessionStorage.setItem('importedResume', JSON.stringify(result));
+
+    // Navigate to review page
+    window.location.href = './review.html';
   } catch (error) {
     console.error('Error uploading resume:', error);
     alert('Failed to process resume: ' + error.message);
     uploadResumeBtn.disabled = false;
     uploadResumeBtn.textContent = 'Upload Resume';
+  } finally {
+    // Reset file input so same file can be selected again
+    resumeFileInput.value = '';
   }
-}
+});
 
 // =============================================================================
 // Utility Functions
@@ -306,7 +334,7 @@ async function uploadResume() {
 
 function formatType(type) {
   const typeNames = {
-    job_entry: 'Job Entry',
+    'job-entry': 'Job Entry',
     accomplishment: 'Accomplishment',
     skill: 'Skill',
     education: 'Education',
@@ -401,7 +429,6 @@ searchBtn.addEventListener('click', applyFilters);
 searchInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') applyFilters();
 });
-uploadResumeBtn.addEventListener('click', uploadResume);
 
 // Clear vault events
 clearVaultBtn.addEventListener('click', showClearVaultModal);

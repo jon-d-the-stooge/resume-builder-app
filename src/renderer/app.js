@@ -1,5 +1,6 @@
 // Dashboard UI Logic
-const { ipcRenderer } = require('./api/ipcAdapter');
+import { ipcRenderer } from './lib/ipcAdapter';
+import { readFileAsBase64 } from './lib/fileUtils';
 
 // DOM Elements
 const statusBanner = document.getElementById('statusBanner');
@@ -411,28 +412,52 @@ function hideStatusBanner() {
 // Event Handlers
 // =============================================================================
 
-// Upload Resume Button - Use native dialog
-uploadResumeBtn.addEventListener('click', async () => {
+// Upload Resume Button - Trigger file input
+uploadResumeBtn.addEventListener('click', () => {
+  resumeFileInput.click();
+});
+
+// Handle file selection for resume upload
+resumeFileInput.addEventListener('change', async (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
   try {
-    const result = await ipcRenderer.invoke('select-resume-file');
+    uploadResumeBtn.disabled = true;
+    uploadResumeBtn.textContent = 'Processing...';
 
-    if (result.success) {
-      uploadResumeBtn.disabled = true;
-      uploadResumeBtn.textContent = 'Processing...';
+    // Read file as base64
+    const base64Content = await readFileAsBase64(file);
 
-      // Process the resume
-      await ipcRenderer.invoke('process-resume', {
-        name: result.name,
-        path: result.path
-      });
+    // Upload to backend
+    const response = await fetch('/api/vaults/import-resume', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fileName: file.name,
+        fileContent: base64Content
+      })
+    });
 
-      // The main process will navigate to review.html on success
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.message || result.error || 'Failed to import resume');
     }
+
+    // Store parsed data for review page
+    sessionStorage.setItem('importedResume', JSON.stringify(result));
+
+    // Navigate to review page
+    window.location.href = './review.html';
   } catch (error) {
     console.error('Error uploading resume:', error);
     showStatusBanner('error', `Failed to process resume: ${error.message}`, 'Try Again', '#');
     uploadResumeBtn.disabled = false;
     uploadResumeBtn.textContent = 'Upload Resume';
+  } finally {
+    // Reset file input so same file can be selected again
+    resumeFileInput.value = '';
   }
 });
 
