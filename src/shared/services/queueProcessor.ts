@@ -23,6 +23,7 @@ import type { ReframingRecommendation } from '../../ats-agent/holistic/holisticA
 import { jobQueue, QueuedJob, OptimizationResult } from './jobQueue';
 import { vaultManager } from './vaultManager';
 import { contentManager } from './contentManager';
+import { knowledgeBaseStore } from './knowledgeBaseStore';
 import { ContentType } from '../obsidian/types';
 import type { Vault, VaultSection, SectionObject, VaultItem } from '../../types/vault';
 import { settingsStore } from './settingsStore';
@@ -79,19 +80,42 @@ export class QueueProcessor {
    * and to produce optimized resume content.
    *
    * @param job - The queued job to process
+   * @param userId - The user ID for vault/knowledge base operations
+   * @param resumeContent - Optional resume content provided directly (skips vault lookup)
    * @returns The optimization result with scores, matches, recommendations, and optimized content
    */
-  async processJob(job: QueuedJob): Promise<OptimizationResult> {
+  async processJob(job: QueuedJob, userId: string, resumeContent?: string): Promise<OptimizationResult> {
     console.log('OPTIMIZE PROCESSOR: running');
     // 1. Convert QueuedJob → JobPosting (ATS domain)
     const jobPosting = this.convertToJobPosting(job);
 
-    // 2. Get resume content from vault
-    const resume = await this.getResumeFromVault();
+    // 2. Get resume content - use provided content or fall back to vault
+    let resume: Resume;
+    if (resumeContent) {
+      console.log('[QueueProcessor] Using provided resume content, length:', resumeContent.length);
+      resume = {
+        id: 'provided-resume',
+        content: resumeContent,
+        format: 'markdown',
+        metadata: {
+          source: 'user-provided',
+          generatedAt: new Date().toISOString()
+        }
+      };
+    } else {
+      resume = await this.getResumeFromVault(userId);
+    }
 
     console.log('[QueueProcessor] Starting holistic optimization for:', job.title);
     console.log('[QueueProcessor] Resume content length:', resume.content.length);
     console.log('[QueueProcessor] Job description length:', jobPosting.description?.length || 0);
+
+    // Validate resume has meaningful content (not just section headers)
+    const meaningfulContent = resume.content.replace(/##\s*\w+/g, '').trim();
+    if (!meaningfulContent || meaningfulContent.length < 50) {
+      console.error('[QueueProcessor] Resume content is empty or too short:', resume.content.substring(0, 200));
+      throw new Error('No resume content found. Please upload a resume or add work experience before running optimization.');
+    }
 
     // 3. Run holistic optimization (produces rewritten resume)
     const llmClient = this.getLLMClient();
@@ -112,6 +136,36 @@ export class QueueProcessor {
 
     // 4. Build OptimizationResult from holistic result
     const result = this.buildOptimizationResultFromHolistic(job, holisticResult);
+
+    // 5. Auto-save to Knowledge Base
+    if (result.optimizedContent) {
+      const lastAnalysis = holisticResult.iterations[holisticResult.iterations.length - 1]?.analysis;
+
+      try {
+        const kbSaved = await knowledgeBaseStore.save(userId, {
+          jobTitle: job.title,
+          company: job.company,
+          jobDescription: job.rawDescription,
+          sourceUrl: job.sourceUrl,
+          optimizedResume: result.optimizedContent,
+          analysis: {
+            finalScore: result.finalScore,
+            initialScore: result.previousScore,
+            iterations: holisticResult.iterations.length,
+            strengths: lastAnalysis?.strengths || [],
+            gaps: lastAnalysis?.gaps || [],
+            recommendations: (lastAnalysis?.recommendations || []).map(rec => ({
+              priority: rec.priority || 'medium',
+              suggestion: rec.suggestedReframe || String(rec),
+              rationale: rec.rationale
+            }))
+          }
+        });
+        console.log('[QueueProcessor] Saved to Knowledge Base:', kbSaved?.id);
+      } catch (err) {
+        console.error('[QueueProcessor] Failed to save to Knowledge Base:', err);
+      }
+    }
 
     return result;
   }
@@ -181,7 +235,7 @@ export class QueueProcessor {
    *
    * Traverses the vault sections to build a complete resume representation.
    */
-  private async getResumeFromVault(): Promise<Resume> {
+  private async getResumeFromVault(userId: string): Promise<Resume> {
     const contentParts: string[] = [];
     let jobCount = 0;
     let accomplishmentCount = 0;
@@ -190,9 +244,10 @@ export class QueueProcessor {
     let certificationCount = 0;
 
     // Get all vaults and use the first one (or most recent)
-    // Note: In Electron desktop context, userId is undefined (uses default user)
-    const vaults = await vaultManager.getAllVaults(undefined);
+    const vaults = await vaultManager.getAllVaults(userId);
+    console.log('[QueueProcessor.getResumeFromVault] Found', vaults.length, 'vaults for user:', userId);
     if (vaults.length === 0) {
+      console.log('[QueueProcessor.getResumeFromVault] No vaults, falling back to content store');
       return this.getResumeFromContentStore();
     }
 
@@ -200,6 +255,7 @@ export class QueueProcessor {
     const vault = vaults.sort((a, b) =>
       new Date(b.metadata.updatedAt).getTime() - new Date(a.metadata.updatedAt).getTime()
     )[0];
+    console.log('[QueueProcessor.getResumeFromVault] Using vault:', vault.id, 'with', vault.sections.length, 'sections');
 
     // Process each section in the vault
     for (const section of vault.sections) {
@@ -316,9 +372,11 @@ export class QueueProcessor {
     }
 
     const content = contentParts.join('\n\n');
+    console.log('[QueueProcessor.getResumeFromVault] Built content from vault, length:', content.length);
 
     // Handle case where no resume content exists
     if (!content.trim()) {
+      console.log('[QueueProcessor.getResumeFromVault] Vault content empty, falling back to content store');
       return this.getResumeFromContentStore();
     }
 
@@ -341,6 +399,7 @@ export class QueueProcessor {
   }
 
   private async getResumeFromContentStore(): Promise<Resume> {
+    console.log('[QueueProcessor.getResumeFromContentStore] Fetching from content store...');
     const types = [
       ContentType.JOB_ENTRY,
       ContentType.EDUCATION,
@@ -352,10 +411,12 @@ export class QueueProcessor {
     const allItems = [];
     for (const type of types) {
       const items = await contentManager.searchContentItems({ contentType: type });
+      console.log(`[QueueProcessor.getResumeFromContentStore] Found ${items.length} items of type ${type}`);
       allItems.push(...items);
     }
 
     const content = allItems.map((item) => item.content).join('\n\n');
+    console.log('[QueueProcessor.getResumeFromContentStore] Total items:', allItems.length, 'content length:', content.length);
     if (!content.trim()) {
       throw new Error('No resume content found. Please upload a resume first.');
     }

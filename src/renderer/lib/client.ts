@@ -198,6 +198,7 @@ export interface QueueJobInput {
   responsibilities?: string[];
   preferredQualifications?: string[];
   priority?: number;
+  resumeContent?: string;
 }
 
 /**

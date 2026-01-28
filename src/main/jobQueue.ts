@@ -205,6 +205,29 @@ export class JobQueue {
   }
 
   /**
+   * Starts a specific job by ID, marking it as processing
+   * Unlike dequeue(), this targets a specific job rather than the next in queue
+   */
+  async startJob(jobId: string): Promise<QueuedJob | null> {
+    const job = this.queue.find(j => j.id === jobId);
+
+    if (!job || job.status !== 'pending') {
+      return null;
+    }
+
+    job.status = 'processing';
+    this.processing = job;
+
+    this.emit('job-started', job);
+
+    if (this.autoSave) {
+      await this.save();
+    }
+
+    return job;
+  }
+
+  /**
    * Marks the current job as completed
    */
   async completeJob(jobId: string, result: OptimizationResult): Promise<void> {

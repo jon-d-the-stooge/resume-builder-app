@@ -121,7 +121,9 @@ export class JobQueue {
    * Initializes the queue, loading persisted state if available
    */
   async initialize(): Promise<void> {
+    console.log('[JobQueue.initialize] Called, queue has', this.queue.length, 'jobs before load');
     await this.load();
+    console.log('[JobQueue.initialize] After load, queue has', this.queue.length, 'jobs');
   }
 
   /**
@@ -208,11 +210,19 @@ export class JobQueue {
    * Marks a specific pending job as processing and returns it.
    */
   async startJob(jobId: string): Promise<QueuedJob | null> {
+    console.log('[JobQueue.startJob] Looking for job:', jobId);
+    console.log('[JobQueue.startJob] Queue has', this.queue.length, 'jobs');
+    this.queue.forEach((j, i) => {
+      console.log(`[JobQueue.startJob] Queue[${i}]: id=${j.id}, status=${j.status}`);
+    });
+
     const job = this.queue.find(j => j.id === jobId && j.status === 'pending');
 
     if (!job) {
+      console.log('[JobQueue.startJob] Job not found or not pending');
       return null;
     }
+    console.log('[JobQueue.startJob] Found job, marking as processing');
 
     job.status = 'processing';
     this.processing = job;

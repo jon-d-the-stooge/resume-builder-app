@@ -1138,7 +1138,7 @@ ipcMain.handle('job-queue-process-next', async () => {
   try {
     // Process through ATS optimization system
     console.log(`Processing job: ${job.title} at ${job.company}`);
-    const result = await queueProcessor.processJob(job);
+    const result = await queueProcessor.processJob(job, 'electron-user');
 
     // Mark job as completed with results
     await jobQueue.completeJob(job.id, result);
@@ -1228,7 +1228,7 @@ ipcMain.handle('job-queue-process-all', async () => {
 
     try {
       console.log(`[${processed + 1}/${totalPending}] Processing: ${job.title} at ${job.company}`);
-      const result = await queueProcessor.processJob(job);
+      const result = await queueProcessor.processJob(job, 'electron-user');
 
       await jobQueue.completeJob(job.id, result);
       await opusAgent.initialize();

@@ -234,7 +234,8 @@ router.post('/optimize', async (req: Request, res: Response) => {
 
     await jobQueue.initialize();
 
-    const { jobId, ...jobData } = req.body;
+    const { jobId, resumeContent, ...jobData } = req.body;
+    console.log('OPTIMIZE ROUTE: resumeContent length:', resumeContent?.length || 0);
     let job;
 
     if (jobId) {
@@ -317,7 +318,8 @@ router.post('/optimize', async (req: Request, res: Response) => {
 
     // Start processing asynchronously (fire and forget)
     // This dequeues the job, processes it, and updates its status
-    processJobAsync(job.id).catch(err => {
+    const userId = req.user?.id || 'dev-user';
+    processJobAsync(job.id, userId, resumeContent).catch(err => {
       jobLogger.error({ err, jobId: job.id }, 'Async job processing error');
     });
 
@@ -353,8 +355,9 @@ router.post('/process-next', async (req: Request, res: Response) => {
       return;
     }
 
+    const userId = req.user?.id || 'dev-user';
     try {
-      const result = await queueProcessor.processJob(job);
+      const result = await queueProcessor.processJob(job, userId);
       await jobQueue.completeJob(job.id, result);
 
       res.json({
@@ -436,6 +439,7 @@ router.post('/process-all', async (req: Request, res: Response) => {
       return;
     }
 
+    const userId = req.user?.id || 'dev-user';
     while (true) {
       const status = jobQueue.getStatus();
       if (status.pendingJobs === 0) break;
@@ -444,7 +448,7 @@ router.post('/process-all', async (req: Request, res: Response) => {
       if (!job) break;
 
       try {
-        const result = await queueProcessor.processJob(job);
+        const result = await queueProcessor.processJob(job, userId);
         await jobQueue.completeJob(job.id, result);
 
         results.push({
@@ -498,8 +502,8 @@ router.post('/process-all', async (req: Request, res: Response) => {
  * Process a job asynchronously. Updates job status as it progresses.
  * This allows the POST /optimize endpoint to return immediately.
  */
-async function processJobAsync(jobId: string): Promise<void> {
-  console.log('PROCESS JOB ASYNC: starting', jobId);
+async function processJobAsync(jobId: string, userId: string, resumeContent?: string): Promise<void> {
+  console.log('PROCESS JOB ASYNC: starting', jobId, 'userId:', userId, 'resumeContent length:', resumeContent?.length || 0);
   await jobQueue.initialize();
 
   const job = await jobQueue.startJob(jobId);
@@ -516,7 +520,7 @@ async function processJobAsync(jobId: string): Promise<void> {
       'Job processing started'
     );
 
-    const result = await queueProcessor.processJob(job);
+    const result = await queueProcessor.processJob(job, userId, resumeContent);
     await jobQueue.completeJob(jobId, result);
 
     const duration = Date.now() - startTime;

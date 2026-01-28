@@ -58,7 +58,7 @@ router.get('/', async (req: Request, res: Response) => {
       }
     }
 
-    const entries = knowledgeBaseStore.list(req.user?.id, Object.keys(filters).length > 0 ? filters : undefined);
+    const entries = await knowledgeBaseStore.list(req.user?.id, Object.keys(filters).length > 0 ? filters : undefined);
 
     res.json({
       success: true,
@@ -80,7 +80,7 @@ router.get('/', async (req: Request, res: Response) => {
  */
 router.get('/stats', async (req: Request, res: Response) => {
   try {
-    const stats = knowledgeBaseStore.getStats(req.user?.id);
+    const stats = await knowledgeBaseStore.getStats(req.user?.id);
 
     res.json({
       success: true,
@@ -102,7 +102,7 @@ router.get('/stats', async (req: Request, res: Response) => {
  */
 router.get('/companies', async (req: Request, res: Response) => {
   try {
-    const companies = knowledgeBaseStore.getCompanies(req.user?.id);
+    const companies = await knowledgeBaseStore.getCompanies(req.user?.id);
 
     res.json({
       success: true,
@@ -124,7 +124,7 @@ router.get('/companies', async (req: Request, res: Response) => {
  */
 router.get('/job-titles', async (req: Request, res: Response) => {
   try {
-    const jobTitles = knowledgeBaseStore.getJobTitles(req.user?.id);
+    const jobTitles = await knowledgeBaseStore.getJobTitles(req.user?.id);
 
     res.json({
       success: true,
@@ -147,7 +147,7 @@ router.get('/job-titles', async (req: Request, res: Response) => {
 router.get('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const entry = knowledgeBaseStore.get(req.user?.id, id);
+    const entry = await knowledgeBaseStore.get(req.user?.id, id);
 
     if (!entry) {
       res.status(404).json({
@@ -213,7 +213,7 @@ router.post('/', async (req: Request, res: Response) => {
       return;
     }
 
-    const entry = knowledgeBaseStore.save(req.user?.id, {
+    const entry = await knowledgeBaseStore.save(req.user?.id, {
       jobTitle,
       company,
       jobDescription,
@@ -277,7 +277,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
       return;
     }
 
-    const entry = knowledgeBaseStore.update(req.user?.id, id, { notes, tags, optimizedResume });
+    const entry = await knowledgeBaseStore.update(req.user?.id, id, { notes, tags, optimizedResume });
 
     if (!entry) {
       res.status(404).json({
@@ -308,7 +308,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const deleted = knowledgeBaseStore.delete(req.user?.id, id);
+    const deleted = await knowledgeBaseStore.delete(req.user?.id, id);
 
     if (!deleted) {
       res.status(404).json({
