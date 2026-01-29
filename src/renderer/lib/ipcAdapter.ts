@@ -177,6 +177,25 @@ function getElectronIpcRenderer(): AnyIpcRenderer | null {
 type HandlerRegistry = Record<IpcChannel, IpcHandler>;
 
 // ============================================================================
+// Progress Helpers
+// ============================================================================
+
+/**
+ * Convert progress phase to a percentage for display
+ */
+function getProgressPercent(phase: string): number {
+  switch (phase) {
+    case 'analyzing': return 15;
+    case 'identifying': return 35;
+    case 'rewriting': return 55;
+    case 'refining': return 75;
+    case 'complete': return 100;
+    case 'error': return 100;
+    default: return 10;
+  }
+}
+
+// ============================================================================
 // Not Implemented Helper
 // ============================================================================
 
@@ -752,8 +771,31 @@ const handlers: HandlerRegistry = {
     });
     console.log('OPTIMIZE IPC: job created', result);
     console.log('OPTIMIZE IPC: waiting for completion');
-    // Wait for completion and return result
-    const completed = await api.jobs.waitForCompletion(result.jobId);
+
+    // Progress callback that emits events to listeners
+    const onProgress = (progress: { phase: string; message: string; updatedAt: string }) => {
+      // Emit progress event to any listeners using the shared eventListeners map
+      const progressData = {
+        percent: getProgressPercent(progress.phase),
+        stage: progress.message,
+        phase: progress.phase,
+        round: 1,
+        totalRounds: 3
+      };
+      const listeners = eventListeners.get('optimizer-progress');
+      if (listeners && listeners.size > 0) {
+        listeners.forEach((listener) => {
+          try {
+            listener({}, progressData);
+          } catch (error) {
+            console.error('IPC Adapter: Error in progress listener:', error);
+          }
+        });
+      }
+    };
+
+    // Wait for completion with progress callback (poll every 500ms to catch progress updates)
+    const completed = await api.jobs.waitForCompletion(result.jobId, 500, 300000, onProgress);
     console.log('OPTIMIZE IPC: completed', completed);
     return {
       success: completed.job.status === 'completed',

@@ -169,6 +169,15 @@ export interface ApplicationStats {
 export type JobStatus = 'pending' | 'processing' | 'completed' | 'failed';
 
 /**
+ * Progress tracking for a job in processing
+ */
+export interface JobProgress {
+  phase: 'analyzing' | 'identifying' | 'rewriting' | 'refining' | 'complete' | 'error';
+  message: string;
+  updatedAt: string;
+}
+
+/**
  * Job queue entry
  */
 export interface QueueJob {
@@ -184,6 +193,7 @@ export interface QueueJob {
   retryCount: number;
   error?: string;
   hasResult: boolean;
+  progress?: JobProgress;
 }
 
 /**
@@ -817,11 +827,17 @@ class ApiClient {
     /**
      * Poll for job status (helper for optimize workflow)
      * Returns the job when it's no longer processing
+     *
+     * @param jobId - The job ID to poll
+     * @param pollInterval - How often to poll in ms (default 2000)
+     * @param maxWait - Maximum wait time in ms (default 300000 = 5 minutes)
+     * @param onProgress - Optional callback for progress updates
      */
     waitForCompletion: async (
       jobId: string,
       pollInterval: number = 2000,
-      maxWait: number = 300000
+      maxWait: number = 300000,
+      onProgress?: (progress: JobProgress) => void
     ): Promise<{ job: QueueJob; result: OptimizationResult | null }> => {
       const startTime = Date.now();
 
@@ -829,6 +845,11 @@ class ApiClient {
         const response = await this.jobs.get(jobId);
         if (!response) {
           throw this.createError('Job not found', 404);
+        }
+
+        // Call progress callback if provided and job has progress
+        if (onProgress && response.job.progress) {
+          onProgress(response.job.progress);
         }
 
         if (response.job.status !== 'pending' && response.job.status !== 'processing') {

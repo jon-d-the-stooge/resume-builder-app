@@ -9,7 +9,8 @@ import { ATSAgentOrchestrator } from '../../ats-agent/orchestrator';
 import {
   optimizeResume as holisticOptimize,
   HolisticOptimizationResult,
-  OptimizationIteration
+  OptimizationIteration,
+  ProgressCallback
 } from '../../ats-agent/holistic/orchestrator';
 import type {
   JobPosting,
@@ -82,9 +83,15 @@ export class QueueProcessor {
    * @param job - The queued job to process
    * @param userId - The user ID for vault/knowledge base operations
    * @param resumeContent - Optional resume content provided directly (skips vault lookup)
+   * @param onProgress - Optional callback for progress updates
    * @returns The optimization result with scores, matches, recommendations, and optimized content
    */
-  async processJob(job: QueuedJob, userId: string, resumeContent?: string): Promise<OptimizationResult> {
+  async processJob(
+    job: QueuedJob,
+    userId: string,
+    resumeContent?: string,
+    onProgress?: ProgressCallback
+  ): Promise<OptimizationResult> {
     console.log('OPTIMIZE PROCESSOR: running');
     // 1. Convert QueuedJob → JobPosting (ATS domain)
     const jobPosting = this.convertToJobPosting(job);
@@ -117,18 +124,42 @@ export class QueueProcessor {
       throw new Error('No resume content found. Please upload a resume or add work experience before running optimization.');
     }
 
+    // Initial progress
+    onProgress?.('analyzing', `Starting optimization for ${job.title} at ${job.company}...`);
+
     // 3. Run holistic optimization (produces rewritten resume)
     const llmClient = this.getLLMClient();
-    const holisticResult = await holisticOptimize(
-      jobPosting,
-      resume,
-      llmClient,
-      {
-        targetFit: 0.8,
-        maxIterations: 3,
-        minImprovement: 0.05
+    let holisticResult: HolisticOptimizationResult;
+
+    try {
+      holisticResult = await holisticOptimize(
+        jobPosting,
+        resume,
+        llmClient,
+        {
+          targetFit: 0.8,
+          maxIterations: 3,
+          minImprovement: 0.05
+        },
+        onProgress
+      );
+    } catch (error) {
+      const message = (error as Error).message;
+      // Handle POOR_FIT case - show friendly message but still throw
+      if (message.startsWith('POOR_FIT:')) {
+        const friendlyMessage = message.replace('POOR_FIT:', '');
+        onProgress?.('complete', friendlyMessage);
       }
-    );
+      throw error;
+    }
+
+    // Handle GREAT_FIT case - celebratory message already shown by orchestrator
+    if (holisticResult.noChangesReason === 'GREAT_FIT') {
+      // Message already set by orchestrator
+    } else {
+      // Final progress for successful optimization
+      onProgress?.('complete', 'Optimization complete!');
+    }
 
     console.log('[QueueProcessor] Holistic optimization complete');
     console.log('[QueueProcessor] Final fit:', holisticResult.finalFit);

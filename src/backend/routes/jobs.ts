@@ -160,7 +160,14 @@ router.get('/:id', async (req: Request, res: Response) => {
         addedAt: job.addedAt.toISOString(),
         processedAt: job.processedAt?.toISOString(),
         retryCount: job.retryCount,
-        error: job.error
+        error: job.error,
+        progress: job.progress ? {
+          phase: job.progress.phase,
+          message: job.progress.message,
+          updatedAt: job.progress.updatedAt instanceof Date
+            ? job.progress.updatedAt.toISOString()
+            : String(job.progress.updatedAt)
+        } : undefined
       },
       result: job.result ? {
         finalScore: job.result.finalScore,
@@ -302,6 +309,10 @@ router.post('/optimize', async (req: Request, res: Response) => {
     }
 
     console.log('OPTIMIZE ROUTE: starting job');
+
+    // Set initial progress immediately so frontend can show it while waiting
+    jobQueue.updateProgress(job.id, 'analyzing', `Starting optimization for ${job.title} at ${job.company}...`);
+
     // Return job ID immediately - processing happens asynchronously
     // The frontend should poll GET /api/jobs/:id to check status
     res.status(202).json({
@@ -312,7 +323,12 @@ router.post('/optimize', async (req: Request, res: Response) => {
         id: job.id,
         company: job.company,
         title: job.title,
-        status: job.status
+        status: job.status,
+        progress: {
+          phase: 'analyzing',
+          message: `Starting optimization for ${job.title} at ${job.company}...`,
+          updatedAt: new Date().toISOString()
+        }
       }
     });
 
@@ -514,13 +530,19 @@ async function processJobAsync(jobId: string, userId: string, resumeContent?: st
 
   const startTime = Date.now();
 
+  // Create progress callback that updates the job queue
+  const onProgress = (phase: string, message: string) => {
+    jobQueue.updateProgress(jobId, phase as any, message);
+    jobLogger.debug({ jobId, phase, message }, 'Job progress update');
+  };
+
   try {
     jobLogger.info(
       { jobId, company: job.company, title: job.title },
       'Job processing started'
     );
 
-    const result = await queueProcessor.processJob(job, userId, resumeContent);
+    const result = await queueProcessor.processJob(job, userId, resumeContent, onProgress);
     await jobQueue.completeJob(jobId, result);
 
     const duration = Date.now() - startTime;
@@ -530,11 +552,20 @@ async function processJobAsync(jobId: string, userId: string, resumeContent?: st
     );
   } catch (error) {
     const duration = Date.now() - startTime;
+    const errorMessage = (error as Error).message;
+
+    // Update progress with error state (use friendly message for POOR_FIT)
+    if (errorMessage.startsWith('POOR_FIT:')) {
+      onProgress('error', errorMessage.replace('POOR_FIT:', ''));
+    } else {
+      onProgress('error', 'Optimization encountered an error');
+    }
+
     jobLogger.error(
       { err: error, jobId, durationMs: duration },
       'Job processing failed'
     );
-    await jobQueue.failJob(jobId, (error as Error).message);
+    await jobQueue.failJob(jobId, errorMessage);
   }
 }
 

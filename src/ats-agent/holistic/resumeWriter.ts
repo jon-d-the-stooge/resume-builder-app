@@ -42,6 +42,16 @@ export async function rewriteResume(
   if (!result.rewrittenContent || result.rewrittenContent.trim().length === 0) {
     console.error('[REWRITE] ERROR: LLM did not return rewrittenContent');
     console.error('[REWRITE] Raw response:', response.content.substring(0, 500));
+
+    // Check if this is an LLM refusal (poor fit scenario)
+    const rawResponse = response.content.toLowerCase();
+    const refusalIndicators = ['cannot', 'decline', 'ethically', 'respectfully', 'unable to', 'not appropriate', 'not comfortable', 'would not be'];
+
+    if (refusalIndicators.some(phrase => rawResponse.includes(phrase))) {
+      // Don't expose LLM's reasoning - use friendly redirect message
+      throw new Error('POOR_FIT:This role may not be the best match for your background. Consider exploring positions that better align with your experience.');
+    }
+
     throw new Error('Resume rewriting failed: LLM did not return rewritten content');
   }
 

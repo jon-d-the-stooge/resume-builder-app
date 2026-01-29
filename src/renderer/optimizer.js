@@ -737,7 +737,13 @@ function hideProgress() {
 }
 
 function handleProgressUpdate(event, data) {
-  updateProgress(data.percent, data.stage, data.round, data.totalRounds);
+  // Use the personalized message from the backend progress if available
+  const stage = data.stage || 'Processing...';
+  const percent = data.percent || 0;
+  const round = data.round || 1;
+  const totalRounds = data.totalRounds || 3;
+
+  updateProgress(percent, stage, round, totalRounds);
 }
 
 function updateProgress(percent, stage, round, totalRounds) {

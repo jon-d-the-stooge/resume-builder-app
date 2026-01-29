@@ -43,6 +43,15 @@ export interface OptimizationResult {
 }
 
 /**
+ * Progress tracking for a job in processing
+ */
+export interface JobProgress {
+  phase: 'analyzing' | 'identifying' | 'rewriting' | 'refining' | 'complete' | 'error';
+  message: string;
+  updatedAt: Date;
+}
+
+/**
  * A job posting in the queue
  */
 export interface QueuedJob {
@@ -60,6 +69,7 @@ export interface QueuedJob {
   error?: string;
   retryCount: number;
   maxRetries: number;
+  progress?: JobProgress;
 }
 
 /**
@@ -111,6 +121,7 @@ export class JobQueue {
   private listeners: QueueEventListener[] = [];
   private persistPath: string;
   private autoSave: boolean;
+  private initialized: boolean = false;
 
   constructor(options?: { persistPath?: string; autoSave?: boolean }) {
     this.persistPath = options?.persistPath || 'job-queue/queue.json';
@@ -118,12 +129,15 @@ export class JobQueue {
   }
 
   /**
-   * Initializes the queue, loading persisted state if available
+   * Initializes the queue, loading persisted state if available.
+   * Skips reload if already initialized to preserve in-memory state (like progress).
    */
   async initialize(): Promise<void> {
-    console.log('[JobQueue.initialize] Called, queue has', this.queue.length, 'jobs before load');
+    if (this.initialized) {
+      return;
+    }
     await this.load();
-    console.log('[JobQueue.initialize] After load, queue has', this.queue.length, 'jobs');
+    this.initialized = true;
   }
 
   /**
@@ -372,6 +386,22 @@ export class JobQueue {
   }
 
   /**
+   * Updates the progress of a job
+   */
+  updateProgress(jobId: string, phase: JobProgress['phase'], message: string): void {
+    const job = this.queue.find(j => j.id === jobId);
+    if (job) {
+      job.progress = {
+        phase,
+        message,
+        updatedAt: new Date()
+      };
+      // Don't persist on every progress update to avoid excessive I/O
+      // Progress is ephemeral and doesn't need to survive restarts
+    }
+  }
+
+  /**
    * Clears all completed and failed jobs
    */
   async clearFinished(): Promise<number> {
@@ -460,6 +490,8 @@ export class JobQueue {
         ...j,
         addedAt: j.addedAt.toISOString(),
         processedAt: j.processedAt?.toISOString(),
+        // Progress is ephemeral and not persisted (cleared on save)
+        progress: undefined,
         result: j.result ? {
           ...j.result,
           processedAt: j.result.processedAt.toISOString()
@@ -496,6 +528,8 @@ export class JobQueue {
         ...j,
         addedAt: new Date(j.addedAt),
         processedAt: j.processedAt ? new Date(j.processedAt) : undefined,
+        // Progress is not persisted, clear any stale data
+        progress: undefined,
         result: j.result ? {
           ...j.result,
           processedAt: new Date(j.result.processedAt)

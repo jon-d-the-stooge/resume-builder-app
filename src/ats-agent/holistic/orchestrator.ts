@@ -19,6 +19,11 @@ export interface OptimizationConfig {
   minImprovement: number;  // Minimum improvement to continue (default 0.05)
 }
 
+/**
+ * Callback for progress updates during optimization
+ */
+export type ProgressCallback = (phase: string, message: string) => void;
+
 export interface OptimizationIteration {
   round: number;
   fitScore: number;
@@ -33,6 +38,7 @@ export interface HolisticOptimizationResult {
   improvement: number;
   iterations: OptimizationIteration[];
   terminationReason: 'target_reached' | 'max_iterations' | 'no_improvement';
+  noChangesReason?: 'GREAT_FIT' | 'POOR_FIT';
 }
 
 const DEFAULT_CONFIG: OptimizationConfig = {
@@ -48,7 +54,8 @@ export async function optimizeResume(
   jobPosting: JobPosting,
   resume: Resume,
   llmClient: LLMClient,
-  config: Partial<OptimizationConfig> = {}
+  config: Partial<OptimizationConfig> = {},
+  onProgress?: ProgressCallback
 ): Promise<HolisticOptimizationResult> {
   const cfg = { ...DEFAULT_CONFIG, ...config };
   const iterations: OptimizationIteration[] = [];
@@ -58,8 +65,14 @@ export async function optimizeResume(
 
   console.log('\n=== HOLISTIC OPTIMIZATION START ===');
 
+  // Build company display string
+  const companyName = jobPosting.metadata?.company || 'the company';
+
   for (let round = 1; round <= cfg.maxIterations; round++) {
     console.log(`\n--- Round ${round} ---`);
+
+    // Progress: Starting analysis
+    onProgress?.('analyzing', `Analyzing ${jobPosting.title} role at ${companyName}...`);
 
     // Step 1: Analyze current resume
     console.log('[ANALYZE] Running holistic analysis...');
@@ -70,11 +83,28 @@ export async function optimizeResume(
     console.log(`[ANALYZE] Strengths: ${analysis.strengths.length}, Gaps: ${analysis.gaps.length}`);
     console.log(`[ANALYZE] Recommendations: ${analysis.recommendations.length}`);
 
+    // Progress: Identifying strengths
+    const topStrengths = analysis.strengths.slice(0, 3);
+    if (topStrengths.length > 0) {
+      onProgress?.('identifying', `Identifying relevant experience: ${topStrengths.join(', ')}...`);
+    }
+
     const iteration: OptimizationIteration = {
       round,
       fitScore: analysis.overallFit,
       analysis
     };
+
+    // Check for "great fit" - already excellent, no changes needed
+    if (round === 1 && analysis.overallFit >= 0.85 && analysis.recommendations.length <= 1) {
+      console.log('[DONE] Already a great fit, no changes needed');
+      onProgress?.('complete', "No notes! You're already a solid fit for this role—we believe making changes could actually hurt your chances. Nicely done!");
+      iterations.push(iteration);
+      return {
+        ...buildResult(resume, currentResume, iterations, 'target_reached'),
+        noChangesReason: 'GREAT_FIT'
+      };
+    }
 
     // Check for improvement stagnation (after first round)
     if (round > 1) {
@@ -90,11 +120,27 @@ export async function optimizeResume(
 
     // Step 2: Rewrite resume when we have recommendations (including final iteration)
     if (analysis.recommendations.length > 0) {
+      // Progress: Starting rewrite
+      const sectionsToModify = analysis.recommendations
+        .map(r => r.jobRequirementAddressed)
+        .filter((v, i, a) => a.indexOf(v) === i)
+        .slice(0, 2);
+      if (sectionsToModify.length > 0) {
+        onProgress?.('rewriting', `Optimizing content for ${sectionsToModify.join(' and ')}...`);
+      } else {
+        onProgress?.('rewriting', 'Applying recommendations to your resume...');
+      }
+
       console.log('[REWRITE] Applying recommendations...');
       const rewrite = await rewriteResume(currentResume, analysis, llmClient);
 
       console.log(`[REWRITE] Changes applied: ${rewrite.changesApplied.length}`);
       console.log(`[REWRITE] Sections modified: ${rewrite.sectionsModified.join(', ')}`);
+
+      // Progress: Refining
+      if (rewrite.sectionsModified.length > 0) {
+        onProgress?.('refining', `Refined ${rewrite.sectionsModified[0]}...`);
+      }
 
       iteration.rewrite = rewrite;
       currentResume = rewrite.rewrittenResume;
@@ -105,6 +151,7 @@ export async function optimizeResume(
   }
 
   console.log(`[DONE] Max iterations (${cfg.maxIterations}) reached`);
+  onProgress?.('complete', 'Optimization complete!');
   return buildResult(resume, currentResume, iterations, 'max_iterations');
 }
 
